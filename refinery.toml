@@ -1,0 +1,3 @@
+[main]
+db_type = "Sqlite"
+db_path = "./db/nexus_cache.db"

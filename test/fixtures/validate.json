@@ -1,0 +1,11 @@
+{
+    "email": "notreal@example.com",
+    "is_premium": true,
+    "is_premium?": true,
+    "is_supporter": true,
+    "is_supporter?": true,
+    "key": "deadbeefcafed00d",
+    "name": "notreal",
+    "profile_url": "https://www.gravatar.com/avatar/0a356ffe066d3d8bf05be73fa57c0a44",
+    "user_id": 60096776
+}

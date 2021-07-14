@@ -1,0 +1,34 @@
+{
+    "allow_rating": true,
+    "author": "ionis",
+    "available": true,
+    "category_id": 89,
+    "contains_adult_content": false,
+    "created_time": "2021-02-18T17:05:56.000+00:00",
+    "created_timestamp": 1613667956,
+    "description": "a very long string",
+    "domain_name": "skyrimspecialedition",
+    "endorsement": {
+        "endorse_status": "Undecided",
+        "timestamp": null,
+        "version": null
+    },
+    "endorsement_count": 224,
+    "game_id": 1704,
+    "mod_id": 45870,
+    "name": "Northpoint SE",
+    "picture_url": "https://staticdelivery.nexusmods.com/mods/1704/images/45870/45870-1613667098-1091922425.png",
+    "status": "published",
+    "summary": "This is a shorter description of the mod!",
+    "uid": 7318624318254,
+    "updated_time": "2021-02-18T17:05:56.000+00:00",
+    "updated_timestamp": 1613667956,
+    "uploaded_by": "ionis",
+    "uploaded_users_profile_url": "https://nexusmods.com/users/134661",
+    "user": {
+        "member_group_id": 3,
+        "member_id": 134661,
+        "name": "ionis"
+    },
+    "version": "1.0.0"
+}
