@@ -78,11 +78,10 @@ CREATE TABLE mods(
 CREATE UNIQUE INDEX idx_mods_game_mod ON mods(domain_name, mod_id);
 
 CREATE TABLE tracked(
-    mod_id INT,
     domain_name text NOT NULL,
-
-    FOREIGN KEY (domain_name) REFERENCES games(id)
+    mod_id INT
 );
+CREATE UNIQUE INDEX idx_tracked_game_mod ON tracked(domain_name, mod_id);
 
 CREATE TABLE endorsements(
     domain_name text NOT NULL,

@@ -1,5 +1,5 @@
 use dotenv::dotenv;
-use log::{info, warn};
+use log::{debug, info, warn};
 use owo_colors::OwoColorize;
 // use prettytable::Table;
 use serde::Serialize;
@@ -9,7 +9,7 @@ use structopt::StructOpt;
 pub mod data;
 pub mod nexus;
 
-use data::{Cacheable, EndorsementStatus, GameMetadata};
+use data::*;
 
 use crate::data::AuthenticatedUser;
 
@@ -74,7 +74,7 @@ enum Command {
     },
 }
 
-fn main() -> std::result::Result<(), Box<dyn std::error::Error + 'static>> {
+fn main() -> anyhow::Result<(), anyhow::Error> {
     dotenv().ok();
     let nexuskey = std::env::var("NEXUS_API_KEY")
         .expect("You must provide your personal Nexus API key in the env var NEXUS_API_KEY.");
@@ -91,7 +91,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error + 'static>> {
     let mut nexus = nexus::NexusClient::new(nexuskey);
     let dbpath =
         std::env::var("NEXUS_CACHE_PATH").unwrap_or_else(|_| "./db/nexus_cache.db".to_string());
-    info!("Storing data in {}", dbpath.bold());
+    debug!("Storing data in {}", dbpath.bold());
     let storage = rusqlite::Connection::open(&dbpath)?;
 
     match flags.cmd {
@@ -111,7 +111,11 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error + 'static>> {
                 "TODO: populate a local cache for {} starting at {}",
                 game, start
             );
-            let tracked = nexus.tracked()?;
+            let tracked = Tracked::fetch("".to_string(), &storage, &mut nexus);
+            if tracked.is_none() {
+                anyhow::bail!("Unable to fetch any tracked mods.");
+            }
+            let tracked = tracked.unwrap();
             println!("You are tracking {} mods.", tracked.mods.len());
             /*
              Steps:
@@ -131,9 +135,9 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error + 'static>> {
             }
         }
         Command::Tracked => {
-            let tracked = nexus.tracked()?;
-            let pretty = serde_json::to_string_pretty(&tracked)?;
-            println!("{}", pretty);
+            if let Some(tracked) = Tracked::fetch("".to_string(), &storage, &mut nexus) {
+                println!("{}", tracked);
+            }
         }
         Command::Endorsements => {
             let opinions = nexus.endorsements()?;
