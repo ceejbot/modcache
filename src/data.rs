@@ -1,22 +1,19 @@
 use log::{error, info};
 use owo_colors::OwoColorize;
-use rusqlite::{params, Connection, Row};
+use rusqlite::{params, Connection, Row, ToSql};
 use serde::{Deserialize, Serialize};
 // use prettytable::Table;
 
 use std::collections::HashMap;
 use std::fmt::Display;
 
-// Nexus mod data structs and trait implementations.
+// Nexus mod data structs and trait implementations, plus caching layer.
 
 pub trait Cacheable {
     fn cache(&self, db: &Connection) -> anyhow::Result<bool>;
     fn from_row(row: &Row) -> Result<Box<Self>, rusqlite::Error>;
-    // these can be abstracted
-    fn lookup_by_int_id(id: u32, db: &Connection) -> Option<Box<Self>>;
-    fn lookup_by_string_id(id: &str, db: &Connection) -> Option<Box<Self>>;
+    fn lookup(id: &dyn ToSql, db: &Connection) -> Option<Box<Self>>;
 }
-
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct AuthenticatedUser {
@@ -78,22 +75,7 @@ impl Cacheable for AuthenticatedUser {
         Ok(Box::new(user))
     }
 
-    fn lookup_by_string_id(id: &str, db: &Connection) -> Option<Box<AuthenticatedUser>> {
-        // TODO handle specific errors
-        match db.query_row(
-            "SELECT * FROM authn_user WHERE email=$1",
-            params![id],
-            |row| AuthenticatedUser::from_row(row),
-        ) {
-            Err(e) => {
-                error!("db query error! {:?}", e);
-                None
-            }
-            Ok(v) => Some(v),
-        }
-    }
-
-    fn lookup_by_int_id(id: u32, db: &Connection) -> Option<Box<AuthenticatedUser>> {
+    fn lookup(id: &dyn ToSql, db: &Connection) -> Option<Box<AuthenticatedUser>> {
         // TODO handle specific errors
         match db.query_row(
             "SELECT * FROM authn_user WHERE user_id=$1",
@@ -122,13 +104,13 @@ impl Display for AuthenticatedUser {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ModCategory {
     category_id: u16,
     name: String,
     // TODO custom deserialization
     // this is either `false` for the top-level game category or an unsigned int that
-    // points to that top-level category_id  for the game
+    // points to that top-level category_id for the game
     parent_category: serde_json::Value,
 }
 
@@ -158,14 +140,31 @@ pub struct GameMetadata {
 
 impl Cacheable for GameMetadata {
     fn cache(&self, db: &Connection) -> anyhow::Result<bool> {
-        // TODO also store categories
+        // TODO on conflict update count fields
         let count = db.execute(r#"INSERT INTO games
                 (id, domain_name, name, approved_date, authors, downloads, file_count, file_endorsements, file_views, forum_url, genre, mods, nexusmods_url)
-                VALUES (?1, ?2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)"#,
+                VALUES (?1, ?2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                ON CONFLICT(domain_name) DO NOTHING"#,
             params![self.id, self.domain_name, self.name, self.approved_date, self.authors,
                 self.downloads, self.file_count, self.file_endorsements, self.file_views,
                 self.forum_url, self.genre, self.mods, self.nexusmods_url],
         )?;
+        info!("{} stored in local cache.", self.domain_name);
+
+        // Cleanup on aisle 4 please.
+        self.categories.clone().into_iter().for_each(|category| {
+            match db.execute(
+                r#"
+                INSERT INTO categories
+                    (category_id, domain_name, name)
+                    VALUES ($1, $2, $3)
+                ON CONFLICT(category_id, domain_name) DO UPDATE SET name=excluded.name"#,
+                params![category.category_id, self.domain_name, category.name],
+            ) {
+                Ok(_) => info!("   + category {}", category.name),
+                Err(e) => error!("{:?}", e),
+            };
+        });
 
         Ok(count > 0)
     }
@@ -190,41 +189,43 @@ impl Cacheable for GameMetadata {
         Ok(Box::new(game))
     }
 
-    fn lookup_by_string_id(id: &str, db: &Connection) -> Option<Box<GameMetadata>> {
-        // Note opportunity for abstraction. Also could chain `.optional()`
-        // TODO fill in categories
-        match db.query_row(
+    fn lookup(id: &dyn ToSql, db: &Connection) -> Option<Box<GameMetadata>> {
+        // Also could chain `.optional()`
+        let mut game = match db.query_row(
             "SELECT * FROM games WHERE domain_name=$1",
             params![id],
             |row| GameMetadata::from_row(row),
         ) {
             Err(rusqlite::Error::QueryReturnedNoRows) => {
-                info!("cache miss for {}", id);
-                None
+                info!("cache miss");
+                return None;
             }
             Err(e) => {
-                error!("db query error! {:?}", e);
-                None
+                error!("error reading{:?}", e);
+                return None;
             }
-            Ok(v) => Some(v),
-        }
-    }
+            Ok(v) => v,
+        };
 
-    fn lookup_by_int_id(id: u32, db: &Connection) -> Option<Box<GameMetadata>> {
-        // TODO fill in categories
-        match db.query_row("SELECT * FROM games WHERE id=$1", params![id], |row| {
-            GameMetadata::from_row(row)
+        let mut stmt = db
+            .prepare("SELECT category_id, name FROM categories WHERE domain_name = $1")
+            .ok()?;
+        match stmt.query_map(params![game.domain_name], |row| {
+            Ok(ModCategory {
+                category_id: row.get(0)?,
+                name: row.get(1)?,
+                parent_category: serde_json::Value::Null,
+            })
         }) {
-            Err(rusqlite::Error::QueryReturnedNoRows) => {
-                info!("cache miss for {}", id);
-                None
-            }
             Err(e) => {
-                error!("db query error! {:?}", e);
-                None
+                error!("error reading categories: {:?}", e);
             }
-            Ok(v) => Some(v),
-        }
+            Ok(rows) => {
+                game.categories = rows.filter_map(|xs| xs.ok()).collect();
+            }
+        };
+
+        Some(game)
     }
 }
 

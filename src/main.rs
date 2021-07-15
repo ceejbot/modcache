@@ -6,8 +6,8 @@ use serde::Serialize;
 use structopt::clap::AppSettings::*;
 use structopt::StructOpt;
 
-mod nexus;
 mod data;
+mod nexus;
 
 use data::{Cacheable, EndorsementStatus, GameMetadata};
 
@@ -94,7 +94,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error + 'static>> {
     match flags.cmd {
         Command::Game { game } => {
             // TODO wrap up the read-through pattern so it doesn't have to show up here.
-            let found = GameMetadata::lookup_by_string_id(&game, &storage);
+            let found = GameMetadata::lookup(&game, &storage);
             if let Some(metadata) = found {
                 info!("found it in cache!");
                 let pretty = serde_json::to_string_pretty(&metadata)?;

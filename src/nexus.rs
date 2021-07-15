@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use log::{error, warn};
 use owo_colors::OwoColorize;
-use serde::{Deserialize};
+use serde::Deserialize;
 
 use std::time::Duration;
 use std::u16;

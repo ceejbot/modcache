@@ -43,7 +43,7 @@ CREATE TABLE mods(
 	id TEXT primary key,
 	domain_name text NOT NULL,
 	mod_id INT,
-	etag text not null,
+	etag text, /* not part of nexus data set */
 
 	uid INT,
 	game_id INT,
