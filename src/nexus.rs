@@ -1,7 +1,8 @@
 use chrono::{DateTime, Utc};
-use log::{error, warn};
+use log::{error, info, warn};
 use owo_colors::OwoColorize;
 // use prettytable::Table;
+use rusqlite::{params, Connection, Row};
 use serde::{Deserialize, Serialize};
 
 use std::collections::HashMap;
@@ -11,18 +12,106 @@ use std::u16;
 
 static NEXUS_BASE: &str = "https://api.nexusmods.com";
 
+pub trait Cacheable {
+    fn cache(&self, db: &Connection) -> anyhow::Result<()>;
+    fn from_row(row: &Row) -> Result<Box<Self>, rusqlite::Error>;
+    // these can be abstracted
+    fn lookup_by_int_id(id: u32, db: &Connection) -> Option<Box<Self>>;
+    fn lookup_by_string_id(id: &str, db: &Connection) -> Option<Box<Self>>;
+}
+
 // Nexus client wrapper and associated response structs;
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct AuthenticatedUser {
-    pub email: String,
-    pub is_premium: bool,
-    pub is_supporter: bool,
-    pub name: String,
-    pub profile_url: String,
-    pub user_id: u32,
+    email: String,
+    is_premium: bool,
+    is_supporter: bool,
+    name: String,
+    profile_url: String,
+    user_id: u32,
     #[serde(flatten)]
-    ignored: HashMap<String, serde_json::Value>,
+    ignored: Option<HashMap<String, serde_json::Value>>,
+}
+
+impl Default for AuthenticatedUser {
+    fn default() -> Self {
+        AuthenticatedUser {
+            name: "example".to_string(),
+            user_id: 1,
+            email: "foo@example.com".to_string(),
+            is_premium: false,
+            is_supporter: false,
+            profile_url: "".to_string(),
+            ignored: None,
+        }
+    }
+}
+
+impl Cacheable for AuthenticatedUser {
+    fn cache(&self, db: &Connection) -> anyhow::Result<()> {
+        let row_count = db.execute(
+            r#"
+            INSERT INTO authn_user
+                (user_id, email, is_premium, is_supporter, name, profile_url)
+                VALUES ($1, $2, $3, $4, $5, $6)
+                ON CONFLICT(user_id) DO NOTHING
+            "#,
+            params![
+                self.user_id,
+                self.email,
+                self.is_premium,
+                self.is_supporter,
+                self.name,
+                self.profile_url
+            ],
+        )?;
+        println!("{:?}", row_count);
+        Ok(())
+    }
+
+    fn from_row(row: &Row) -> Result<Box<AuthenticatedUser>, rusqlite::Error> {
+        let user = AuthenticatedUser {
+            user_id: row.get(0)?,
+            email: row.get(1)?,
+            is_premium: row.get(2)?,
+            is_supporter: row.get(3)?,
+            name: row.get(4)?,
+            profile_url: row.get(5)?,
+            ..Default::default()
+        };
+        Ok(Box::new(user))
+    }
+
+    fn lookup_by_string_id(id: &str, db: &Connection) -> Option<Box<AuthenticatedUser>> {
+        // TODO handle specific errors
+        match db.query_row(
+            "SELECT * FROM authn_user WHERE email=$1",
+            params![id],
+            |row| AuthenticatedUser::from_row(row),
+        ) {
+            Err(e) => {
+                error!("db query error! {:?}", e);
+                None
+            }
+            Ok(v) => Some(v),
+        }
+    }
+
+    fn lookup_by_int_id(id: u32, db: &Connection) -> Option<Box<AuthenticatedUser>> {
+        // TODO handle specific errors
+        match db.query_row(
+            "SELECT * FROM authn_user WHERE user_id=$1",
+            params![id],
+            |row| AuthenticatedUser::from_row(row),
+        ) {
+            Err(e) => {
+                error!("db query error! {:?}", e);
+                None
+            }
+            Ok(v) => Some(v),
+        }
+    }
 }
 
 impl Display for AuthenticatedUser {
@@ -72,13 +161,78 @@ pub struct GameMetadata {
     nexusmods_url: String,
 }
 
+impl Cacheable for GameMetadata {
+    fn cache(&self, db: &Connection) -> anyhow::Result<()> {
+        // TODO upsert?
+        db.execute(r#"INSERT INTO games
+                (id, domain_name, name, approved_date, authors, downloads, file_count, file_endorsements, file_views, forum_url, genre, mods, nexusmods_url)
+                VALUES (?1, ?2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)"#,
+            params![self.id, self.domain_name, self.name, self.approved_date, self.authors, self.downloads, self.file_count, self.file_endorsements, self.file_views, self.forum_url, self.genre, self.mods, self.nexusmods_url],
+        )?;
+
+        Ok(())
+    }
+
+    fn from_row(row: &Row) -> Result<Box<GameMetadata>, rusqlite::Error> {
+        let game = GameMetadata {
+            id: row.get(0)?,
+            domain_name: row.get(1)?,
+            name: row.get(2)?,
+            approved_date: row.get(3)?,
+            authors: row.get(4)?,
+            downloads: row.get(5)?,
+            file_count: row.get(6)?,
+            file_endorsements: row.get(7)?,
+            file_views: row.get(8)?,
+            forum_url: row.get(9)?,
+            genre: row.get(10)?,
+            mods: row.get(11)?,
+            nexusmods_url: row.get(12)?,
+            categories: Vec::new(),
+        };
+        Ok(Box::new(game))
+    }
+
+    fn lookup_by_string_id(id: &str, db: &Connection) -> Option<Box<GameMetadata>> {
+        // Note opportunity for abstraction.
+        match db.query_row(
+            "SELECT * FROM games WHERE domain_name=$1",
+            params![id],
+            |row| GameMetadata::from_row(row),
+        ) {
+            Err(rusqlite::Error::QueryReturnedNoRows) => {
+                info!("cache miss for {}", id);
+                None
+            }
+            Err(e) => {
+                error!("db query error! {:?}", e);
+                None
+            }
+            Ok(v) => Some(v),
+        }
+    }
+
+    fn lookup_by_int_id(id: u32, db: &Connection) -> Option<Box<GameMetadata>> {
+        // Note opportunity for abstraction.
+        match db.query_row("SELECT * FROM games WHERE id=$1", params![id], |row| {
+            GameMetadata::from_row(row)
+        }) {
+            Err(e) => {
+                error!("db query error! {:?}", e);
+                None
+            }
+            Ok(v) => Some(v),
+        }
+    }
+}
+
 // write!(f, "    {} <{}\n    https://www.nexusmods.com/{}/mods/categories/{}\n    {}>",
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct ModAuthor {
-    member_group_id: u16,
-    member_id: u32,
-    name: String,
+    pub(crate) member_group_id: u16,
+    pub(crate) member_id: u32,
+    pub(crate) name: String,
 }
 
 impl Display for ModAuthor {
@@ -133,9 +287,9 @@ pub struct EndorsementList {
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct ModEndorsement {
-    endorse_status: EndorsementStatus,
-    timestamp: Option<u64>,
-    version: Option<String>,
+    pub(crate) endorse_status: EndorsementStatus,
+    pub(crate) timestamp: Option<u64>,
+    pub(crate) version: Option<String>,
 }
 
 impl Display for ModEndorsement {
@@ -188,7 +342,7 @@ pub struct ModInfoFull {
     updated_time: String,
     updated_timestamp: u64,
 
-    available: bool,
+    pub(crate) available: bool,
     status: ModStatus,
     allow_rating: bool,
     category_id: u16,

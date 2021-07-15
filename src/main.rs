@@ -1,14 +1,15 @@
 use dotenv::dotenv;
-use log::warn;
-// use owo_colors::OwoColorize;
+use log::{info, warn};
+use owo_colors::OwoColorize;
 // use prettytable::Table;
 use serde::Serialize;
 use structopt::clap::AppSettings::*;
 use structopt::StructOpt;
 
-use crate::nexus::EndorsementStatus;
+use crate::nexus::{EndorsementStatus, GameMetadata};
 
 mod nexus;
+use nexus::Cacheable;
 
 // static MOST_RECENT_ID: u32 = 52368;
 
@@ -86,10 +87,23 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error + 'static>> {
         .unwrap();
 
     let mut nexus = nexus::NexusClient::new(nexuskey);
+    let dbpath =
+        std::env::var("NEXUS_CACHE_PATH").unwrap_or_else(|_| "./db/nexus_cache.db".to_string());
+    let storage = rusqlite::Connection::open(&dbpath)?;
 
     match flags.cmd {
         Command::Game { game } => {
+            let found = GameMetadata::lookup_by_string_id(&game, &storage);
+            if let Some(metadata) = found {
+                info!("found it in cache!");
+                let pretty = serde_json::to_string_pretty(&metadata)?;
+                println!("{}", pretty);
+                return Ok(());
+            }
+            warn!("fetching {}", game.bright_yellow());
             let res = nexus.gameinfo(&game)?;
+            res.cache(&storage)?;
+            warn!("stored {}!", game.bright_yellow());
             let pretty = serde_json::to_string_pretty(&res)?;
             println!("{}", pretty);
         }
@@ -118,6 +132,8 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error + 'static>> {
         Command::Validate => {
             let user = nexus.validate()?;
             println!("You are logged in as:\n{}", user);
+            user.cache(&storage)?;
+            warn!("Stored!");
         }
         Command::Tracked => {
             let tracked = nexus.tracked()?;

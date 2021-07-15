@@ -4,6 +4,15 @@ CREATE TABLE users(
 	name text NOT NULL
 );
 
+CREATE TABLE authn_user(
+	user_id INT PRIMARY KEY,
+	email TEXT,
+	is_premium TINYINT,
+	is_supporter TINYINT,
+	name TEXT,
+	profile_url TEXT
+);
+
 CREATE TABLE games(
 	id INT UNIQUE,
 	domain_name TEXT PRIMARY KEY,
