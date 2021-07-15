@@ -6,10 +6,12 @@ use serde::Serialize;
 use structopt::clap::AppSettings::*;
 use structopt::StructOpt;
 
-mod data;
-mod nexus;
+pub mod data;
+pub mod nexus;
 
 use data::{Cacheable, EndorsementStatus, GameMetadata};
+
+use crate::data::AuthenticatedUser;
 
 // static MOST_RECENT_ID: u32 = 52368;
 
@@ -89,25 +91,15 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error + 'static>> {
     let mut nexus = nexus::NexusClient::new(nexuskey);
     let dbpath =
         std::env::var("NEXUS_CACHE_PATH").unwrap_or_else(|_| "./db/nexus_cache.db".to_string());
+    info!("Storing data in {}", dbpath.bold());
     let storage = rusqlite::Connection::open(&dbpath)?;
 
     match flags.cmd {
         Command::Game { game } => {
-            // TODO wrap up the read-through pattern so it doesn't have to show up here.
-            let found = GameMetadata::lookup(&game, &storage);
-            if let Some(metadata) = found {
-                info!("found it in cache!");
+            if let Some(metadata) = GameMetadata::fetch(game, &storage, &mut nexus) {
                 let pretty = serde_json::to_string_pretty(&metadata)?;
                 println!("{}", pretty);
-                return Ok(());
             }
-            warn!("fetching {}", game.bright_yellow());
-            let res = nexus.gameinfo(&game)?;
-            if res.cache(&storage)? {
-                warn!("stored {}!", game.bright_yellow());
-            }
-            let pretty = serde_json::to_string_pretty(&res)?;
-            println!("{}", pretty);
         }
         Command::Mod { game, mod_id } => {
             let res = nexus.mod_by_id(&game, mod_id)?;
@@ -132,10 +124,10 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error + 'static>> {
             */
         }
         Command::Validate => {
-            let user = nexus.validate()?;
-            println!("You are logged in as:\n{}", user);
-            if user.cache(&storage)? {
-                warn!("stored your user record!");
+            if let Some(user) = AuthenticatedUser::fetch("".to_string(), &storage, &mut nexus) {
+                warn!("You are logged in as:\n{}", user);
+            } else {
+                warn!("Something went wrong validating your API key.")
             }
         }
         Command::Tracked => {

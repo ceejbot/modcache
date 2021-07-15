@@ -1,4 +1,4 @@
-use log::{error, info};
+use log::{error, info, warn};
 use owo_colors::OwoColorize;
 use rusqlite::{params, Connection, Row, ToSql};
 use serde::{Deserialize, Serialize};
@@ -7,12 +7,20 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Display;
 
+use crate::nexus::NexusClient;
+
 // Nexus mod data structs and trait implementations, plus caching layer.
 
 pub trait Cacheable {
-    fn cache(&self, db: &Connection) -> anyhow::Result<bool>;
-    fn from_row(row: &Row) -> Result<Box<Self>, rusqlite::Error>;
+    /// Get the item, trying the cache first.
+    // this api is still wrong, but getting closer
+    fn fetch(id: String, db: &Connection, nexus: &mut NexusClient) -> Option<Box<Self>>;
+    /// Try to find the item in the cache.
     fn lookup(id: &dyn ToSql, db: &Connection) -> Option<Box<Self>>;
+    // Store an item in the cache.
+    fn cache(&self, db: &Connection) -> anyhow::Result<bool>;
+    /// Inflate a single instance of this item from a db row. Implementationd detail.
+    fn from_row(row: &Row) -> Result<Box<Self>, rusqlite::Error>;
 }
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -42,6 +50,19 @@ impl Default for AuthenticatedUser {
 }
 
 impl Cacheable for AuthenticatedUser {
+    fn fetch(_id: String, db: &Connection, nexus: &mut NexusClient) -> Option<Box<Self>> {
+        // We just always hit the nexus to validate the token.
+        match nexus.validate() {
+            Err(_) => None,
+            Ok(user) => {
+                if user.cache(db).is_ok() {
+                    info!("stored your user record!");
+                }
+                Some(Box::new(user))
+            }
+        }
+    }
+
     fn cache(&self, db: &Connection) -> anyhow::Result<bool> {
         let count = db.execute(
             r#"
@@ -139,6 +160,63 @@ pub struct GameMetadata {
 }
 
 impl Cacheable for GameMetadata {
+    fn fetch(id: String, db: &Connection, nexus: &mut NexusClient) -> Option<Box<Self>> {
+        let hit = Self::lookup(&id, db);
+        if hit.is_some() {
+            return hit;
+        }
+
+        match nexus.gameinfo(&id) {
+            Err(_) => None,
+            Ok(game) => {
+                if game.cache(db).is_ok() {
+                    warn!("stored {}!", game.domain_name.bright_yellow());
+                }
+                Some(Box::new(game))
+            }
+        }
+    }
+
+    fn lookup(id: &dyn ToSql, db: &Connection) -> Option<Box<GameMetadata>> {
+        // Also could chain `.optional()`
+        let mut game = match db.query_row(
+            "SELECT * FROM games WHERE domain_name=$1",
+            params![id],
+            |row| GameMetadata::from_row(row),
+        ) {
+            Err(rusqlite::Error::QueryReturnedNoRows) => {
+                info!("cache miss");
+                return None;
+            }
+            Err(e) => {
+                error!("error reading{:?}", e);
+                return None;
+            }
+            Ok(v) => v,
+        };
+
+        let mut stmt = db
+            .prepare("SELECT category_id, name FROM categories WHERE domain_name = $1")
+            .ok()?;
+        match stmt.query_map(params![game.domain_name], |row| {
+            Ok(ModCategory {
+                category_id: row.get(0)?,
+                name: row.get(1)?,
+                parent_category: serde_json::Value::Null,
+            })
+        }) {
+            Err(e) => {
+                error!("error reading categories: {:?}", e);
+            }
+            Ok(rows) => {
+                game.categories = rows.filter_map(|xs| xs.ok()).collect();
+            }
+        };
+
+        info!("cache hit for {}", game.domain_name);
+        Some(game)
+    }
+
     fn cache(&self, db: &Connection) -> anyhow::Result<bool> {
         // TODO on conflict update count fields
         let count = db.execute(r#"INSERT INTO games
@@ -187,45 +265,6 @@ impl Cacheable for GameMetadata {
             categories: Vec::new(),
         };
         Ok(Box::new(game))
-    }
-
-    fn lookup(id: &dyn ToSql, db: &Connection) -> Option<Box<GameMetadata>> {
-        // Also could chain `.optional()`
-        let mut game = match db.query_row(
-            "SELECT * FROM games WHERE domain_name=$1",
-            params![id],
-            |row| GameMetadata::from_row(row),
-        ) {
-            Err(rusqlite::Error::QueryReturnedNoRows) => {
-                info!("cache miss");
-                return None;
-            }
-            Err(e) => {
-                error!("error reading{:?}", e);
-                return None;
-            }
-            Ok(v) => v,
-        };
-
-        let mut stmt = db
-            .prepare("SELECT category_id, name FROM categories WHERE domain_name = $1")
-            .ok()?;
-        match stmt.query_map(params![game.domain_name], |row| {
-            Ok(ModCategory {
-                category_id: row.get(0)?,
-                name: row.get(1)?,
-                parent_category: serde_json::Value::Null,
-            })
-        }) {
-            Err(e) => {
-                error!("error reading categories: {:?}", e);
-            }
-            Ok(rows) => {
-                game.categories = rows.filter_map(|xs| xs.ok()).collect();
-            }
-        };
-
-        Some(game)
     }
 }
 
