@@ -6,10 +6,10 @@ use serde::Serialize;
 use structopt::clap::AppSettings::*;
 use structopt::StructOpt;
 
-use crate::nexus::{EndorsementStatus, GameMetadata};
-
 mod nexus;
-use nexus::Cacheable;
+mod data;
+
+use data::{Cacheable, EndorsementStatus, GameMetadata};
 
 // static MOST_RECENT_ID: u32 = 52368;
 
@@ -93,6 +93,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error + 'static>> {
 
     match flags.cmd {
         Command::Game { game } => {
+            // TODO wrap up the read-through pattern so it doesn't have to show up here.
             let found = GameMetadata::lookup_by_string_id(&game, &storage);
             if let Some(metadata) = found {
                 info!("found it in cache!");
@@ -102,8 +103,9 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error + 'static>> {
             }
             warn!("fetching {}", game.bright_yellow());
             let res = nexus.gameinfo(&game)?;
-            res.cache(&storage)?;
-            warn!("stored {}!", game.bright_yellow());
+            if res.cache(&storage)? {
+                warn!("stored {}!", game.bright_yellow());
+            }
             let pretty = serde_json::to_string_pretty(&res)?;
             println!("{}", pretty);
         }
@@ -132,8 +134,9 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error + 'static>> {
         Command::Validate => {
             let user = nexus.validate()?;
             println!("You are logged in as:\n{}", user);
-            user.cache(&storage)?;
-            warn!("Stored!");
+            if user.cache(&storage)? {
+                warn!("stored your user record!");
+            }
         }
         Command::Tracked => {
             let tracked = nexus.tracked()?;
