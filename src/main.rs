@@ -98,7 +98,14 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
             }
         }
         Command::Mod { game, mod_id } => {
-            if let Some(modinfo) = ModInfoFull::fetch(Key::NameIdPair{ name: game, id: mod_id }, &storage, &mut nexus) {
+            if let Some(modinfo) = ModInfoFull::fetch(
+                Key::NameIdPair {
+                    name: game,
+                    id: mod_id,
+                },
+                &storage,
+                &mut nexus,
+            ) {
                 println!("{}", modinfo);
             }
         }
@@ -122,7 +129,25 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                 if GameMetadata::fetch(Key::Name(key.to_string()), &storage, &mut nexus).is_some() {
                     debug!("    {} metadata now in cache", key.yellow().bold());
                 }
-                // Now walk all mod_ids in the vec and store those.
+                // Now walk all mod_ids in the vec and store those. Except skyrim for now.
+                if key == "skyrimspecialedition" {
+                    continue;
+                }
+                let mut count = 0;
+                val.iter().for_each(|id| {
+                    if let Some(modinfo) = ModInfoFull::fetch(
+                        Key::NameIdPair {
+                            name: key.clone(),
+                            id: *id,
+                        },
+                        &storage,
+                        &mut nexus,
+                    ) {
+                        count += 1;
+                        println!("{}", modinfo);
+                    }
+                });
+                println!("   cached data for {} mods", count);
             }
         }
         Command::Validate => {

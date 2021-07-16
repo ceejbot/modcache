@@ -128,7 +128,7 @@ impl NexusClient {
             Err(e) => {
                 error!("problem deserializing: {:?}", e);
                 Err(anyhow::Error::new(e))
-            },
+            }
             Ok(v) => Ok(v),
         }
     }

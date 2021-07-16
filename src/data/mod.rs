@@ -8,12 +8,12 @@ use std::fmt::Display;
 use crate::nexus::NexusClient;
 
 pub mod modinfo;
-pub mod user;
 pub mod tracked;
+pub mod user;
 
 pub use modinfo::*;
-pub use user::*;
 pub use tracked::*;
+pub use user::*;
 
 // Nexus mod data structs and trait implementations, plus caching layer.
 // More complex structures are broken out into separate files.
@@ -246,4 +246,3 @@ pub struct ModReference {
 pub struct ModReferenceList {
     pub mods: Vec<ModReference>,
 }
-

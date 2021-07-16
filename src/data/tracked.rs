@@ -6,8 +6,8 @@ use rusqlite::{params, Connection, Row};
 use std::collections::HashMap;
 use std::fmt::Display;
 
-use crate::nexus::NexusClient;
 use super::{Cacheable, Key, ModReference, ModReferenceList};
+use crate::nexus::NexusClient;
 
 // Store and retrieve your list of tracked mods.
 
@@ -63,7 +63,10 @@ impl Cacheable for Tracked {
                     mod_id: row.get(1).ok()?,
                 });
             }
-        } else {
+        }
+
+        if result.mods.is_empty() {
+            // Trigger a refetch from the Nexus.
             return None;
         }
 

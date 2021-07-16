@@ -13,9 +13,9 @@ use crate::{Cacheable, Key};
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct ModAuthor {
-    pub(crate) member_group_id: u16,
-    pub(crate) member_id: u32,
-    pub(crate) name: String,
+    member_group_id: u16,
+    member_id: u32,
+    name: String,
 }
 
 impl Display for ModAuthor {
@@ -76,20 +76,22 @@ impl Default for ModEndorsement {
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum ModStatus {
     #[serde()]
     NotPublished,
     Published,
     Hidden,
+    Removed,
 }
 
 impl Into<String> for ModStatus {
     fn into(self) -> String {
         match self {
             ModStatus::Hidden => "hidden".to_string(),
-            ModStatus::NotPublished => "notpublished".to_string(),
+            ModStatus::NotPublished => "not_published".to_string(),
             ModStatus::Published => "published".to_string(),
+            ModStatus::Removed => "removed".to_string(),
         }
     }
 }
@@ -98,9 +100,10 @@ impl From<String> for ModStatus {
     fn from(s: String) -> Self {
         match s.as_ref() {
             "hidden" => ModStatus::Hidden,
-            "notpublished" => ModStatus::NotPublished,
+            "not_published" => ModStatus::NotPublished,
             "published" => ModStatus::Published,
-            _ => ModStatus::NotPublished,
+            "removed" => ModStatus::Removed,
+            _ => ModStatus::Removed,
         }
     }
 }
@@ -283,7 +286,7 @@ impl Cacheable for ModInfoFull {
         let status_str: String = row.get("status")?;
         let status = match serde_json::from_str(&status_str) {
             Ok(v) => v,
-            Err(_) => ModStatus::NotPublished
+            Err(_) => ModStatus::NotPublished,
         };
 
         let modinfo = ModInfoFull {
@@ -305,9 +308,8 @@ impl Cacheable for ModInfoFull {
             endorsement_count: row.get("endorsement_count")?,
             created_time: row.get("nexus_created")?,
             updated_time: row.get("nexus_updated")?,
-            ..Default::default()
-            // todo user_id INT
-            // ModEndorsement field
+            ..Default::default() // todo user_id INT
+                                 // ModEndorsement field
         };
         Ok(Box::new(modinfo))
     }
