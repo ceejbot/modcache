@@ -166,27 +166,14 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
             if let Some(tracked) = Tracked::all(&store, &mut nexus) {
                 println!("{}", tracked);
             } else {
-                println!("whoops?");
+                println!("Something went wrong fetching tracked mods. Rerun with -v to get more details.");
             }
         }
         Command::Endorsements => {
-            let opinions = nexus.endorsements()?;
-            // A very imperative way of doing this, but I hated iterating more than once.
-            let mut endorsed: u16 = 0;
-            let mut abstained: u16 = 0;
-            opinions.mods.iter().for_each(|xs| match xs.status() {
-                EndorsementStatus::Endorsed => endorsed += 1,
-                EndorsementStatus::Abstained => abstained += 1,
-                _ => {}
-            });
-            println!(
-                "You have endorsed {} mods and abstained for {}.",
-                endorsed, abstained
-            );
-
-            // This display is pretty useless, but leaving it for now.
-            for item in opinions.mods.into_iter() {
-                println!("{}", item);
+            if let Some(opinions) = EndorsementList::all(&store, &mut nexus) {
+                println!{"{}", opinions};
+            } else {
+                println!("Something went wrong fetching endorsements. Rerun with -v to get more details.");
             }
         }
         Command::Trending { game } => {

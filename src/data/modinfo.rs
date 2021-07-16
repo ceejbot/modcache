@@ -8,9 +8,9 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
 use crate::nexus::NexusClient;
-use crate::{Cacheable, Key};
+use crate::{Cacheable, EndorsementStatus, Key};
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(serde::Deserialize, Serialize, Debug, Clone)]
 pub struct ModAuthor {
     member_group_id: u16,
     member_id: u32,
@@ -29,23 +29,6 @@ impl Default for ModAuthor {
             member_group_id: 0,
             member_id: 0,
             name: "Alan Smithee".to_string(),
-        }
-    }
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone)]
-pub enum EndorsementStatus {
-    Endorsed,
-    Undecided,
-    Abstained,
-}
-
-impl Display for EndorsementStatus {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            EndorsementStatus::Endorsed => write!(f, "👍🏻"),
-            EndorsementStatus::Undecided => write!(f, "🤨"),
-            _ => write!(f, "🚫"),
         }
     }
 }
