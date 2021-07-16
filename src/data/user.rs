@@ -1,4 +1,4 @@
-use log::{error, info};
+use log::error;
 use owo_colors::OwoColorize;
 use serde::{Deserialize, Serialize};
 
@@ -48,7 +48,17 @@ impl kv::Value for AuthenticatedUser {
 }
 
 impl Cacheable for AuthenticatedUser {
-    fn find(key: Key, db: &kv::Store, nexus: &mut NexusClient) -> Option<Box<Self>> {
+    fn bucket(db: &kv::Store) -> Option<kv::Bucket<'static, &'static str, Self>> {
+        match db.bucket::<&str, Self>(Some("authed_users")) {
+            Err(e) => {
+                error!("Can't open bucket for users! {:?}", e);
+                None
+            }
+            Ok(v) => Some(v),
+        }
+    }
+
+    fn local(key: Key, db: &kv::Store) -> Option<Box<Self>> {
         let id = match key {
             Key::Name(v) => v,
             _ => {
@@ -58,34 +68,14 @@ impl Cacheable for AuthenticatedUser {
 
         let bucket = AuthenticatedUser::bucket(db).unwrap();
         let found = bucket.get(&*id).ok()?;
-        if found.is_some() {
-            info!("informationally, we found a user in the db, but we're validating the api key anyway.");
-            info!("{}", found.unwrap());
-            // return found.unwrap();
-        }
-
-        if let Ok(user) = nexus.validate() {
-            match bucket.set(&*id, user.clone()) {
-                Ok(()) => {
-                    info!("stored your user record!");
-                }
-                Err(e) => {
-                    error!("error storing user record: {:?}", e);
-                }
-            }
-            return Some(Box::new(user));
-        }
-
-        None
+        found.map(Box::new)
     }
 
-    fn bucket(db: &kv::Store) -> Option<kv::Bucket<'static, &'static str, Self>> {
-        match db.bucket::<&str, Self>(Some("authed_users")) {
-            Err(e) => {
-                error!("Can't open bucket for users! {:?}", e);
-                None
-            }
-            Ok(v) => Some(v),
+    fn fetch(_key: Key, nexus: &mut NexusClient) -> Option<Box<Self>> {
+        if let Ok(user) = nexus.validate() {
+            Some(Box::new(user))
+        } else {
+            None
         }
     }
 

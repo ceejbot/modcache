@@ -93,13 +93,13 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
 
     match flags.cmd {
         Command::Game { game } => {
-            if let Some(metadata) = GameMetadata::find(Key::Name(game), &store, &mut nexus) {
+            if let Some(metadata) = find::<GameMetadata>(Key::Name(game), &store, &mut nexus) {
                 let pretty = serde_json::to_string_pretty(&metadata)?;
                 println!("{}", pretty);
             }
         }
         Command::Mod { game, mod_id } => {
-            if let Some(modinfo) = ModInfoFull::find(
+            if let Some(modinfo) = find::<ModInfoFull>(
                 Key::NameIdPair {
                     name: game,
                     id: mod_id,
@@ -127,7 +127,7 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                     val.len().bold(),
                     key.yellow().bold()
                 );
-                if GameMetadata::find(Key::Name(key.to_string()), &store, &mut nexus).is_some() {
+                if find::<GameMetadata>(Key::Name(key.to_string()), &store, &mut nexus).is_some() {
                     debug!("    {} metadata now in cache", key.yellow().bold());
                 }
                 /*
@@ -155,7 +155,7 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
         }
         Command::Validate => {
             if let Some(user) =
-                AuthenticatedUser::find(Key::Name("authed_user".to_string()), &store, &mut nexus)
+                AuthenticatedUser::fetch(Key::Name("authed_user".to_string()), &mut nexus)
             {
                 warn!("You are logged in as:\n{}", user);
             } else {

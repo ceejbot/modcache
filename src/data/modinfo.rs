@@ -197,33 +197,6 @@ impl kv::Value for ModInfoFull {
 }
 
 impl Cacheable for ModInfoFull {
-    fn find(key: Key, db: &kv::Store, nexus: &mut NexusClient) -> Option<Box<Self>> {
-        let (game, mod_id) = match key {
-            Key::NameIdPair { name, id } => (name, id),
-            _ => {
-                return None;
-            }
-        };
-
-        let compound = format!("{}/{}", game, mod_id);
-
-        let bucket = ModInfoFull::bucket(db).unwrap();
-        let found = bucket.get(&*compound).ok()?;
-        if let Some(modinfo) = found {
-            info!("cache hit for {}", compound);
-            return Some(Box::new(modinfo));
-        }
-
-        if let Ok(modinfo) = nexus.mod_by_id(&game, mod_id) {
-            if bucket.set(&*compound, modinfo.clone()).is_ok() {
-                info!("cached record for {}", compound);
-            }
-            return Some(Box::new(modinfo));
-        }
-
-        None
-    }
-
     fn bucket(db: &kv::Store) -> Option<kv::Bucket<'static, &'static str, Self>> {
         match db.bucket::<&str, Self>(Some("mods")) {
             Err(e) => {
@@ -231,6 +204,39 @@ impl Cacheable for ModInfoFull {
                 None
             }
             Ok(v) => Some(v),
+        }
+    }
+
+    fn local(key: Key, db: &kv::Store) -> Option<Box<Self>> {
+        let (game, mod_id) = match key {
+            Key::NameIdPair { name, id } => (name, id),
+            _ => {
+                return None;
+            }
+        };
+        let compound = format!("{}/{}", game, mod_id);
+        let bucket = ModInfoFull::bucket(db).unwrap();
+        let found = bucket.get(&*compound).ok()?;
+        if let Some(modinfo) = found {
+            info!("cache hit for {}", compound);
+            Some(Box::new(modinfo))
+        } else {
+            None
+        }
+    }
+
+    fn fetch(key: Key, nexus: &mut NexusClient) -> Option<Box<Self>> {
+        let (game, mod_id) = match key {
+            Key::NameIdPair { name, id } => (name, id),
+            _ => {
+                return None;
+            }
+        };
+
+        if let Ok(modinfo) = nexus.mod_by_id(&game, mod_id) {
+            Some(Box::new(modinfo))
+        } else {
+            None
         }
     }
 

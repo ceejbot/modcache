@@ -1,4 +1,4 @@
-use log::{error, info};
+use log::error;
 use owo_colors::OwoColorize;
 use prettytable::{cell, row, Table};
 use serde::{Deserialize, Serialize};
@@ -21,8 +21,6 @@ pub struct ModReference {
 #[serde(transparent)]
 pub struct Tracked {
     pub mods: Vec<ModReference>,
-    #[serde(skip)]
-    key: String,
 }
 
 impl Display for ModReference {
@@ -57,19 +55,7 @@ impl Tracked {
     }
 
     pub fn all(db: &kv::Store, nexus: &mut NexusClient) -> Option<Box<Self>> {
-        if let Some(found) = Tracked::find(Key::Name("tracked".to_string()), db, nexus) {
-            return Some(found);
-        }
-
-        match nexus.tracked() {
-            Err(_) => None,
-            Ok(tracked) => {
-                if tracked.store(db).is_ok() {
-                    info!("stored {} tracked mods", tracked.mods.len());
-                }
-                Some(Box::new(tracked))
-            }
-        }
+        super::find::<Tracked>(Key::Unused, db, nexus)
     }
 }
 
@@ -94,30 +80,6 @@ impl Display for Tracked {
 }
 
 impl Cacheable for Tracked {
-    fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
-        let bucket = Tracked::bucket(db).unwrap();
-        if bucket.set(&*self.key, self.clone()).is_ok() {
-            Ok(1)
-        } else {
-            Ok(0)
-        }
-    }
-
-    fn find(key: Key, db: &kv::Store, _nexus: &mut NexusClient) -> Option<Box<Self>> {
-        let id = match key {
-            Key::Name(v) => v,
-            _ => {
-                return None;
-            }
-        };
-        let bucket = Tracked::bucket(db).unwrap();
-        let found = bucket.get(&*id).ok()?;
-        if let Some(modref_list) = found {
-            return Some(Box::new(modref_list));
-        }
-        None
-    }
-
     fn bucket(store: &kv::Store) -> Option<kv::Bucket<'static, &'static str, Tracked>> {
         match store.bucket::<&str, Tracked>(Some("mod_ref_lists")) {
             Err(e) => {
@@ -125,6 +87,31 @@ impl Cacheable for Tracked {
                 None
             }
             Ok(v) => Some(v),
+        }
+    }
+
+    fn local(_key: Key, db: &kv::Store) -> Option<Box<Self>> {
+        let bucket = Tracked::bucket(db).unwrap();
+        let found = bucket.get("tracked").ok()?;
+        if let Some(modref_list) = found {
+            return Some(Box::new(modref_list));
+        }
+        None
+    }
+
+    fn fetch(_key: Key, nexus: &mut NexusClient) -> Option<Box<Self>> {
+        match nexus.tracked() {
+            Err(_) => None,
+            Ok(tracked) => Some(Box::new(tracked)),
+        }
+    }
+
+    fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
+        let bucket = Tracked::bucket(db).unwrap();
+        if bucket.set("tracked", self.clone()).is_ok() {
+            Ok(1)
+        } else {
+            Ok(0)
         }
     }
 }

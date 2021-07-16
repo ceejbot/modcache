@@ -17,12 +17,36 @@ pub use user::*;
 // Nexus mod data structs and trait implementations, plus caching layer.
 // More complex structures are broken out into separate files.
 
+/// Get the item, looking in local cache first then calling to the Nexus if not found.
+pub fn find<T>(key: Key, db: &kv::Store, nexus: &mut NexusClient) -> Option<Box<T>>
+where
+    T: Cacheable,
+{
+    if let Some(found) = T::local(key.clone(), db) {
+        info!("cache hit for {:?}", key);
+        return Some(found);
+    }
+    if let Some(fetched) = T::fetch(key.clone(), nexus) {
+        info!("fetched from the Nexus for {:?}", key);
+        if fetched.store(db).is_ok() {
+            info!("cached {:?}", key);
+        }
+        return Some(fetched);
+    }
+    None
+}
+
 pub trait Cacheable
 where
     Self: kv::Value,
 {
-    fn find(id: Key, store: &kv::Store, nexus: &mut NexusClient) -> Option<Box<Self>>;
-    fn bucket(store: &kv::Store) -> Option<kv::Bucket<'static, &'static str, Self>>;
+    /// Get the kv/sled bucket where these items are stored.
+    fn bucket(db: &kv::Store) -> Option<kv::Bucket<'static, &'static str, Self>>;
+    /// Look for the item locally.
+    fn local(key: Key, db: &kv::Store) -> Option<Box<Self>>;
+    /// Fetch this item from the Nexus.
+    fn fetch(key: Key, nexus: &mut NexusClient) -> Option<Box<Self>>;
+    /// Store this item in local cache.
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize>;
 }
 
@@ -81,7 +105,17 @@ impl kv::Value for GameMetadata {
 }
 
 impl Cacheable for GameMetadata {
-    fn find(key: Key, db: &kv::Store, nexus: &mut NexusClient) -> Option<Box<Self>> {
+    fn bucket(db: &kv::Store) -> Option<kv::Bucket<'static, &'static str, Self>> {
+        match db.bucket::<&str, Self>(Some("games")) {
+            Err(e) => {
+                error!("Can't open bucket for game metadata! {:?}", e);
+                None
+            }
+            Ok(v) => Some(v),
+        }
+    }
+
+    fn local(key: Key, db: &kv::Store) -> Option<Box<Self>> {
         let id = match key {
             Key::Name(v) => v,
             _ => {
@@ -92,28 +126,26 @@ impl Cacheable for GameMetadata {
         let found = bucket.get(&*id).ok()?;
         if let Some(game) = found {
             info!("cache hit for {}", id);
-            return Some(Box::new(game));
+            Some(Box::new(game))
+        } else {
+            None
         }
+    }
 
+    fn fetch(key: Key, nexus: &mut NexusClient) -> Option<Box<Self>> {
+        let id = match key {
+            Key::Name(v) => v,
+            _ => {
+                return None;
+            }
+        };
         if let Ok(game) = nexus.gameinfo(&id) {
-            if game.store(db).is_ok() {
-                info!("cached record for {}", id);
-            }
-            return Some(Box::new(game));
-        }
-
-        None
-    }
-
-    fn bucket(db: &kv::Store) -> Option<kv::Bucket<'static, &'static str, Self>> {
-        match db.bucket::<&str, Self>(Some("games")) {
-            Err(e) => {
-                error!("Can't open bucket for game metadata! {:?}", e);
-                None
-            }
-            Ok(v) => Some(v),
+            Some(Box::new(game))
+        } else {
+            None
         }
     }
+
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
         let bucket = GameMetadata::bucket(db).unwrap();
         if bucket.set(&*self.domain_name, self.clone()).is_ok() {
