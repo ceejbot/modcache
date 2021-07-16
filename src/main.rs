@@ -1,5 +1,5 @@
 use dotenv::dotenv;
-use log::{debug, info, warn};
+use log::{debug, warn};
 use owo_colors::OwoColorize;
 // use prettytable::Table;
 use serde::Serialize;
@@ -10,8 +10,6 @@ pub mod data;
 pub mod nexus;
 
 use data::*;
-
-use crate::data::AuthenticatedUser;
 
 // static MOST_RECENT_ID: u32 = 52368;
 
@@ -37,8 +35,6 @@ enum Command {
     Populate {
         #[structopt(default_value = "skyrimspecialedition")]
         game: String,
-        #[structopt(default_value = "0")]
-        start: String,
     },
     /// Test your Nexus API key; whoami
     Validate,
@@ -96,46 +92,48 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
 
     match flags.cmd {
         Command::Game { game } => {
-            if let Some(metadata) = GameMetadata::fetch(game, &storage, &mut nexus) {
+            if let Some(metadata) = GameMetadata::fetch(Key::Name(game), &storage, &mut nexus) {
                 let pretty = serde_json::to_string_pretty(&metadata)?;
                 println!("{}", pretty);
             }
         }
         Command::Mod { game, mod_id } => {
-            let res = nexus.mod_by_id(&game, mod_id)?;
-            // let pretty = serde_json::to_string_pretty(&res)?;
-            println!("{}", res);
+            if let Some(modinfo) = ModInfoFull::fetch(Key::NameIdPair{ name: game, id: mod_id }, &storage, &mut nexus) {
+                println!("{}", modinfo);
+            }
         }
-        Command::Populate { game, start } => {
-            warn!(
-                "TODO: populate a local cache for {} starting at {}",
-                game, start
-            );
-            let tracked = Tracked::fetch("".to_string(), &storage, &mut nexus);
+        Command::Populate { game } => {
+            warn!("TODO: populate a local cache for {}", game.yellow());
+            let tracked = Tracked::fetch(Key::Unused, &storage, &mut nexus);
             if tracked.is_none() {
                 anyhow::bail!("Unable to fetch any tracked mods.");
             }
             let tracked = tracked.unwrap();
             println!("You are tracking {} mods.", tracked.mods.len());
-            /*
-             Steps:
-                Fetch tracked mods. Iterate list.
-                If present in the db:
-                    fetch etag; use etag for conditional nexus request
-                    refresh data if updated
-                If not present:
-                    fetch mod data & populate db
-            */
+            let mapped = tracked.get_game_map();
+
+            // First get metadata for all our games.
+            for (key, val) in mapped.iter() {
+                println!(
+                    "Populating {} tracked mods for {}",
+                    val.len().bold(),
+                    key.yellow().bold()
+                );
+                if GameMetadata::fetch(Key::Name(key.to_string()), &storage, &mut nexus).is_some() {
+                    debug!("    {} metadata now in cache", key.yellow().bold());
+                }
+                // Now walk all mod_ids in the vec and store those.
+            }
         }
         Command::Validate => {
-            if let Some(user) = AuthenticatedUser::fetch("".to_string(), &storage, &mut nexus) {
+            if let Some(user) = AuthenticatedUser::fetch(Key::Unused, &storage, &mut nexus) {
                 warn!("You are logged in as:\n{}", user);
             } else {
                 warn!("Something went wrong validating your API key.")
             }
         }
         Command::Tracked => {
-            if let Some(tracked) = Tracked::fetch("".to_string(), &storage, &mut nexus) {
+            if let Some(tracked) = Tracked::fetch(Key::Unused, &storage, &mut nexus) {
                 println!("{}", tracked);
             }
         }

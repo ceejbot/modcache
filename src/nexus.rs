@@ -125,7 +125,10 @@ impl NexusClient {
 
         let payload = response.into_json::<T>();
         match payload {
-            Err(e) => Err(anyhow::Error::new(e)),
+            Err(e) => {
+                error!("problem deserializing: {:?}", e);
+                Err(anyhow::Error::new(e))
+            },
             Ok(v) => Ok(v),
         }
     }
@@ -133,42 +136,42 @@ impl NexusClient {
     // Boy, this sure looks like predictable code.
 
     pub fn gameinfo(&mut self, game: &str) -> anyhow::Result<GameMetadata> {
-        let uri = format!("{}//v1/games/{}.json", NEXUS_BASE, game);
+        let uri = format!("{}/v1/games/{}.json", NEXUS_BASE, game);
         self.make_request::<GameMetadata>(&uri)
     }
 
     pub fn mod_by_id(&mut self, game: &str, modid: u32) -> anyhow::Result<ModInfoFull> {
-        let uri = format!("{}//v1/games/{}/mods/{}.json", NEXUS_BASE, game, modid);
+        let uri = format!("{}/v1/games/{}/mods/{}.json", NEXUS_BASE, game, modid);
         self.make_request::<ModInfoFull>(&uri)
     }
 
     pub fn validate(&mut self) -> anyhow::Result<AuthenticatedUser> {
-        let uri = format!("{}//v1/users/validate.json", NEXUS_BASE);
+        let uri = format!("{}/v1/users/validate.json", NEXUS_BASE);
         self.make_request::<AuthenticatedUser>(&uri)
     }
 
     pub fn tracked(&mut self) -> anyhow::Result<ModReferenceList> {
-        let uri = format!("{}//v1/user/tracked_mods.json", NEXUS_BASE);
+        let uri = format!("{}/v1/user/tracked_mods.json", NEXUS_BASE);
         self.make_request::<ModReferenceList>(&uri)
     }
 
     pub fn endorsements(&mut self) -> anyhow::Result<EndorsementList> {
-        let uri = format!("{}//v1/user/endorsements.json", NEXUS_BASE);
+        let uri = format!("{}/v1/user/endorsements.json", NEXUS_BASE);
         self.make_request::<EndorsementList>(&uri)
     }
 
     pub fn trending(&mut self, game: &str) -> anyhow::Result<ModInfoList> {
-        let uri = format!("{}//v1/games/{}/mods/trending.json", NEXUS_BASE, game);
+        let uri = format!("{}/v1/games/{}/mods/trending.json", NEXUS_BASE, game);
         self.make_request::<ModInfoList>(&uri)
     }
 
     pub fn latest_added(&mut self, game: &str) -> anyhow::Result<ModInfoList> {
-        let uri = format!("{}//v1/games/{}/mods/latest_added.json", NEXUS_BASE, game);
+        let uri = format!("{}/v1/games/{}/mods/latest_added.json", NEXUS_BASE, game);
         self.make_request::<ModInfoList>(&uri)
     }
 
     pub fn latest_updated(&mut self, game: &str) -> anyhow::Result<ModInfoList> {
-        let uri = format!("{}//v1/games/{}/mods/latest_updated.json", NEXUS_BASE, game);
+        let uri = format!("{}/v1/games/{}/mods/latest_updated.json", NEXUS_BASE, game);
         self.make_request::<ModInfoList>(&uri)
     }
 

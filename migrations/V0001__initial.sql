@@ -40,38 +40,33 @@ CREATE TABLE categories(
 CREATE UNIQUE INDEX idx_categories_game_id ON categories(domain_name, category_id);
 
 CREATE TABLE mods(
-	id TEXT primary key,
 	domain_name text NOT NULL,
-	mod_id INT,
+	mod_id INT NOT NULL,
 	etag text, /* not part of nexus data set */
 
-	uid INT,
-	game_id INT,
+	uid INT NOT NULL,
+	game_id INT NOT NULL,
 
-	name text,
-	version text,
-	category_id INT,
-	summary text,
-	description text,
-	picture_url text,
-	available BOOLEAN default TRUE,
-	status text,
-	allow_rating BOOLEAN,
-	contains_adult_content BOOLEAN default FALSE,
+	name TEXT,
+	version TEXT,
+	category_id INT NOT NULL,
+	summary TEXT,
+	description TEXT,
+	picture_url TEXT,
+	status TEXT,
+	available INT DEFAULT 1,
+	allow_rating INT DEFAULT 0,
+	contains_adult_content INT DEFAULT 0,
 
-	author text NOT NULL,
-	uploaded_by text NOT NULL,
-	uploaded_users_profile_url text,
+	author TEXT NOT NULL,
+	uploaded_by TEXT NOT NULL,
+	uploaded_users_profile_url TEXT,
 	user_id INT,
-	endorsement_count INT,
+	endorsement_count INT DEFAULT 0,
 	nexus_created timestamp,
 	nexus_updated timestamp,
 
-	created DATETIME NOT NULL default (datetime('now', 'utc')),
-	modified DATETIME NOT NULL default (datetime('now', 'utc')),
-	deleted DATETIME,
-
-	FOREIGN KEY (user_id) REFERENCES users(member_id),
+	/* FOREIGN KEY (user_id) REFERENCES users(member_id), */
 	FOREIGN KEY (domain_name) REFERENCES games(id)
 );
 
