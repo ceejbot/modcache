@@ -61,18 +61,18 @@ impl NexusClient {
         uri: &str,
     ) -> Result<T, anyhow::Error> {
         if self.limits.hourly_remaining < 1 {
-            anyhow::bail!(
+            error!(
                 "Past hourly api call limit of {}! Wait until {}",
-                self.limits.hourly_limit,
-                self.limits.hourly_reset
+                self.limits.hourly_limit, self.limits.hourly_reset
             );
+            anyhow::bail!("Rate-limited");
         }
         if self.limits.daily_remaining < 1 {
-            anyhow::bail!(
+            error!(
                 "Past daily api call limit of {}! Wait until {}",
-                self.limits.daily_limit,
-                self.limits.daily_reset
+                self.limits.daily_limit, self.limits.daily_reset
             );
+            anyhow::bail!("Rate-limited");
         }
 
         let response = match self

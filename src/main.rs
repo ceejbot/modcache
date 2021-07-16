@@ -86,24 +86,25 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
 
     let mut nexus = nexus::NexusClient::new(nexuskey);
     let dbpath =
-        std::env::var("NEXUS_CACHE_PATH").unwrap_or_else(|_| "./db/nexus_cache.db".to_string());
+        std::env::var("NEXUS_CACHE_PATH").unwrap_or_else(|_| "./db/nexus_cache.sled".to_string());
     debug!("Storing data in {}", dbpath.bold());
-    let storage = rusqlite::Connection::open(&dbpath)?;
+    let cfg = kv::Config::new(dbpath);
+    let store = kv::Store::new(cfg)?;
 
     match flags.cmd {
         Command::Game { game } => {
-            if let Some(metadata) = GameMetadata::fetch(Key::Name(game), &storage, &mut nexus) {
+            if let Some(metadata) = GameMetadata::find(Key::Name(game), &store, &mut nexus) {
                 let pretty = serde_json::to_string_pretty(&metadata)?;
                 println!("{}", pretty);
             }
         }
         Command::Mod { game, mod_id } => {
-            if let Some(modinfo) = ModInfoFull::fetch(
+            if let Some(modinfo) = ModInfoFull::find(
                 Key::NameIdPair {
                     name: game,
                     id: mod_id,
                 },
-                &storage,
+                &store,
                 &mut nexus,
             ) {
                 println!("{}", modinfo);
@@ -111,7 +112,7 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
         }
         Command::Populate { game } => {
             warn!("TODO: populate a local cache for {}", game.yellow());
-            let tracked = Tracked::fetch(Key::Unused, &storage, &mut nexus);
+            let tracked = Tracked::all(&store, &mut nexus);
             if tracked.is_none() {
                 anyhow::bail!("Unable to fetch any tracked mods.");
             }
@@ -126,21 +127,22 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                     val.len().bold(),
                     key.yellow().bold()
                 );
-                if GameMetadata::fetch(Key::Name(key.to_string()), &storage, &mut nexus).is_some() {
+                if GameMetadata::find(Key::Name(key.to_string()), &store, &mut nexus).is_some() {
                     debug!("    {} metadata now in cache", key.yellow().bold());
                 }
+                /*
                 // Now walk all mod_ids in the vec and store those. Except skyrim for now.
                 if key == "skyrimspecialedition" {
                     continue;
                 }
                 let mut count = 0;
                 val.iter().for_each(|id| {
-                    if let Some(modinfo) = ModInfoFull::fetch(
+                    if let Some(modinfo) = ModInfoFull::find(
                         Key::NameIdPair {
                             name: key.clone(),
                             id: *id,
                         },
-                        &storage,
+                        &store,
                         &mut nexus,
                     ) {
                         count += 1;
@@ -148,17 +150,20 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                     }
                 });
                 println!("   cached data for {} mods", count);
+                */
             }
         }
         Command::Validate => {
-            if let Some(user) = AuthenticatedUser::fetch(Key::Unused, &storage, &mut nexus) {
+            if let Some(user) =
+                AuthenticatedUser::find(Key::Name("authed_user".to_string()), &store, &mut nexus)
+            {
                 warn!("You are logged in as:\n{}", user);
             } else {
                 warn!("Something went wrong validating your API key.")
             }
         }
         Command::Tracked => {
-            if let Some(tracked) = Tracked::fetch(Key::Unused, &storage, &mut nexus) {
+            if let Some(tracked) = Tracked::all(&store, &mut nexus) {
                 println!("{}", tracked);
             }
         }

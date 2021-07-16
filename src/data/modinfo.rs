@@ -3,15 +3,14 @@
 use chrono::Utc;
 use log::{error, info};
 use owo_colors::OwoColorize;
-use rusqlite::{params, Connection, Row};
 use serde::{Deserialize, Serialize};
 
 use std::fmt::Display;
 
 use crate::nexus::NexusClient;
-use crate::{Cacheable, Key};
+use crate::{Cached, Key};
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ModAuthor {
     member_group_id: u16,
     member_id: u32,
@@ -34,7 +33,7 @@ impl Default for ModAuthor {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub enum EndorsementStatus {
     Endorsed,
     Undecided,
@@ -51,7 +50,7 @@ impl Display for EndorsementStatus {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ModEndorsement {
     pub(crate) endorse_status: EndorsementStatus,
     pub(crate) timestamp: Option<u64>,
@@ -85,17 +84,6 @@ pub enum ModStatus {
     Removed,
 }
 
-impl Into<String> for ModStatus {
-    fn into(self) -> String {
-        match self {
-            ModStatus::Hidden => "hidden".to_string(),
-            ModStatus::NotPublished => "not_published".to_string(),
-            ModStatus::Published => "published".to_string(),
-            ModStatus::Removed => "removed".to_string(),
-        }
-    }
-}
-
 impl From<String> for ModStatus {
     fn from(s: String) -> Self {
         match s.as_ref() {
@@ -108,7 +96,7 @@ impl From<String> for ModStatus {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ModInfoFull {
     // the next two fields fully identify a mod
     domain_name: String,
@@ -196,63 +184,20 @@ impl Display for ModInfoFull {
     }
 }
 
-impl Cacheable for ModInfoFull {
-    fn fetch(key: Key, db: &Connection, nexus: &mut NexusClient) -> Option<Box<Self>> {
-        let hit = Self::lookup(key.clone(), db);
-        if hit.is_some() {
-            info!("cache hit for {:?}", key);
-            return hit;
-        }
-
-        let (game, mod_id) = match key {
-            Key::NameIdPair { name, id } => (name, id),
-            _ => {
-                return None;
-            }
-        };
-        match nexus.mod_by_id(&game, mod_id) {
-            Err(_) => None,
-            Ok(modinfo) => {
-                println!("got something back from the nexus");
-                if modinfo.cache(db).is_ok() {
-                    info!("stored mod {} # {}", game.yellow(), mod_id.blue());
-                }
-                Some(Box::new(modinfo))
-            }
-        }
+impl kv::Value for ModInfoFull {
+    fn to_raw_value(&self) -> Result<kv::Raw, kv::Error> {
+        let x = serde_json::to_vec(&self)?;
+        Ok(x.into())
     }
 
-    fn cache(&self, db: &Connection) -> anyhow::Result<usize> {
-        // TODO all sub-data via joins or whatever.
-        // We are not writing an ORM, people. We're doing it the old-fashioned way.
-        // This parameter list makes me doubt my life choices in not using an ORM.
-        let status = serde_json::to_string(&self.status)?;
-        let count = db.execute(
-            r#"INSERT INTO mods (
-                    domain_name, mod_id, uid, game_id,
-                    name, version, category_id, summary, description,
-                    picture_url, available, status, allow_rating,
-                    author, uploaded_by, uploaded_users_profile_url,
-                    endorsement_count,
-                    nexus_created, nexus_updated
-                )
-                VALUES (?1, ?2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
-                ON CONFLICT(domain_name, mod_id) DO NOTHING"#,
-            params![self.domain_name, self.mod_id, self.uid, self.game_id,
-                self.name, self.version, self.category_id, self.summary, self.description,
-                self.picture_url, self.available, status, self.allow_rating,
-                self.author, self.uploaded_by, self.uploaded_users_profile_url,
-                self.endorsement_count,
-                self.created_time, self.updated_time
-            ],
-        )?;
-
-        // TODO: user field (ModAuthor struct)
-        // TODO: endorsement status (ModEndorsement)
-        Ok(count)
+    fn from_raw_value(r: kv::Raw) -> Result<Self, kv::Error> {
+        let x: Self = serde_json::from_slice(&r)?;
+        Ok(x)
     }
+}
 
-    fn lookup(key: Key, db: &Connection) -> Option<Box<Self>> {
+impl Cached for ModInfoFull {
+    fn find(key: Key, db: &kv::Store, nexus: &mut NexusClient) -> Option<Box<Self>> {
         let (game, mod_id) = match key {
             Key::NameIdPair { name, id } => (name, id),
             _ => {
@@ -260,57 +205,42 @@ impl Cacheable for ModInfoFull {
             }
         };
 
-        let modinfo = match db.query_row(
-            r#"SELECT * FROM mods WHERE domain_name=$1 AND mod_id=$2"#,
-            params![game, mod_id],
-            |row| ModInfoFull::from_row(row),
-        ) {
-            Err(rusqlite::Error::QueryReturnedNoRows) => {
-                info!("cache miss");
-                return None;
+        let compound = format!("{}/{}", game, mod_id);
+
+        let bucket = ModInfoFull::bucket(db).unwrap();
+        let found = bucket.get(&*compound).ok()?;
+        if let Some(modinfo) = found {
+            info!("cache hit for {}", compound);
+            return Some(Box::new(modinfo));
+        }
+
+        if let Ok(modinfo) = nexus.mod_by_id(&game, mod_id) {
+            if bucket.set(&*compound, modinfo.clone()).is_ok() {
+                info!("cached record for {}", compound);
             }
+            return Some(Box::new(modinfo));
+        }
+
+        None
+    }
+
+    fn bucket(db: &kv::Store) -> Option<kv::Bucket<'static, &'static str, Self>> {
+        match db.bucket::<&str, Self>(Some("mods")) {
             Err(e) => {
-                error!("sqlite error: {:?}", e);
-                return None;
+                error!("Can't open bucket for mod info! {:?}", e);
+                None
             }
-            Ok(v) => v,
-        };
-
-        // TODO there's work here
-
-        Some(modinfo)
+            Ok(v) => Some(v),
+        }
     }
 
-    fn from_row(row: &Row) -> Result<Box<Self>, rusqlite::Error> {
-        // A little hacky.
-        let status_str: String = row.get("status")?;
-        let status = match serde_json::from_str(&status_str) {
-            Ok(v) => v,
-            Err(_) => ModStatus::NotPublished,
-        };
-
-        let modinfo = ModInfoFull {
-            domain_name: row.get("domain_name")?,
-            mod_id: row.get("mod_id")?,
-            name: row.get("name")?,
-            version: row.get("version")?,
-            category_id: row.get("category_id")?,
-            summary: row.get("summary")?,
-            description: row.get("description")?,
-            picture_url: row.get("picture_url")?,
-            status,
-            available: row.get("available")?,
-            allow_rating: row.get("allow_rating")?,
-            contains_adult_content: row.get("contains_adult_content")?,
-            author: row.get("author")?,
-            uploaded_by: row.get("uploaded_by")?,
-            uploaded_users_profile_url: row.get("uploaded_users_profile_url")?,
-            endorsement_count: row.get("endorsement_count")?,
-            created_time: row.get("nexus_created")?,
-            updated_time: row.get("nexus_updated")?,
-            ..Default::default() // todo user_id INT
-                                 // ModEndorsement field
-        };
-        Ok(Box::new(modinfo))
+    fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
+        let bucket = ModInfoFull::bucket(db).unwrap();
+        let compound = format!("{}/{}", self.domain_name, self.mod_id);
+        if bucket.set(&*compound, self.clone()).is_ok() {
+            Ok(1)
+        } else {
+            Ok(0)
+        }
     }
 }
