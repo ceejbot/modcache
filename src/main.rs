@@ -1,5 +1,5 @@
 use dotenv::dotenv;
-use log::{debug, warn};
+use log::{debug, warn, error};
 use owo_colors::OwoColorize;
 // use prettytable::Table;
 use serde::Serialize;
@@ -180,6 +180,10 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
             let res = nexus.trending(&game)?;
             for item in res.mods.into_iter() {
                 println!("{}", item);
+                // never waste an opportunity to cache!
+                if item.store(&store).is_err() {
+                    error!("storing mod failed...");
+                };
             }
         }
         Command::Latest { game } => {
@@ -187,6 +191,9 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
             for item in res.mods.into_iter() {
                 if item.available() {
                     println!("{}", item);
+                    if item.store(&store).is_err() {
+                        error!("storing mod failed...");
+                    };
                 }
             }
         }
@@ -194,6 +201,9 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
             let res = nexus.latest_updated(&game)?;
             for item in res.mods.into_iter() {
                 println!("{}", item);
+                if item.store(&store).is_err() {
+                    error!("storing mod failed...");
+                };
             }
         }
     }
