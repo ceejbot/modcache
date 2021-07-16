@@ -6,17 +6,7 @@ Another use case is for me to scan my list of tracked mods to see which ones I h
 
 It remains to be seen how practical it will be to cache mod metadata locally given API rate limits. It might be more practical to scrape their fully-rendered website.
 
-## Hacking
-
-Install Rust for your platform with [rustup](https://rustup.rs). The tool uses [sqlite3](https://sqlite.org/index.html) for local storage. There are some conveniences provided as Makefile targets to wrap up tasks like creating the db and running migrations. To use the migration targets, you'll need the [refinery migration tool](https://lib.rs/crates/refinery_cli) installed. On OX X, with homebrew installed:
-
-```sh
-brew install sqlite
-cargo install refinery_cli
-make create
-make build
-bin/modcache --help
-```
+Install Rust for your platform with [rustup](https://rustup.rs). Copy `.env-example` into `.env` and add your api key, which you can find [on the Nexus settings page](https://www.nexusmods.com/users/myaccount?tab=api). Run `cargo run -- help` for usage.
 
 ## References
 
