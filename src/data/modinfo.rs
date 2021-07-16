@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
 use crate::nexus::NexusClient;
-use crate::{Cached, Key};
+use crate::{Cacheable, Key};
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ModAuthor {
@@ -196,7 +196,7 @@ impl kv::Value for ModInfoFull {
     }
 }
 
-impl Cached for ModInfoFull {
+impl Cacheable for ModInfoFull {
     fn find(key: Key, db: &kv::Store, nexus: &mut NexusClient) -> Option<Box<Self>> {
         let (game, mod_id) = match key {
             Key::NameIdPair { name, id } => (name, id),

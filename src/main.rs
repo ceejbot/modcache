@@ -165,6 +165,8 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
         Command::Tracked => {
             if let Some(tracked) = Tracked::all(&store, &mut nexus) {
                 println!("{}", tracked);
+            } else {
+                println!("whoops?");
             }
         }
         Command::Endorsements => {

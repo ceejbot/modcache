@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::fmt::Display;
 
 use crate::nexus::NexusClient;
-use crate::{Cached, Key};
+use crate::{Cacheable, Key};
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct AuthenticatedUser {
@@ -47,7 +47,7 @@ impl kv::Value for AuthenticatedUser {
     }
 }
 
-impl Cached for AuthenticatedUser {
+impl Cacheable for AuthenticatedUser {
     fn find(key: Key, db: &kv::Store, nexus: &mut NexusClient) -> Option<Box<Self>> {
         let id = match key {
             Key::Name(v) => v,

@@ -150,9 +150,9 @@ impl NexusClient {
         self.make_request::<AuthenticatedUser>(&uri)
     }
 
-    pub fn tracked(&mut self) -> anyhow::Result<ModReferenceList> {
+    pub fn tracked(&mut self) -> anyhow::Result<Tracked> {
         let uri = format!("{}/v1/user/tracked_mods.json", NEXUS_BASE);
-        self.make_request::<ModReferenceList>(&uri)
+        self.make_request::<Tracked>(&uri)
     }
 
     pub fn endorsements(&mut self) -> anyhow::Result<EndorsementList> {

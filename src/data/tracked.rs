@@ -1,17 +1,35 @@
 use log::{error, info};
 use owo_colors::OwoColorize;
 use prettytable::{cell, row, Table};
+use serde::{Deserialize, Serialize};
 
 use std::collections::HashMap;
 use std::fmt::Display;
 
-use super::{Cached, Key, ModReference, ModReferenceList};
+use super::{Cacheable, Key};
 use crate::nexus::NexusClient;
 
-// Store and retrieve your list of tracked mods.
+// Store and retrieve the tracked mods list.
 
-pub type Tracked = ModReferenceList;
-pub type TrackedMod = ModReference;
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ModReference {
+    pub domain_name: String,
+    pub mod_id: u32,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(transparent)]
+pub struct Tracked {
+    pub mods: Vec<ModReference>,
+    #[serde(skip)]
+    key: String,
+}
+
+impl Display for ModReference {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {}", self.domain_name.yellow(), self.mod_id.blue())
+    }
+}
 
 impl Tracked {
     pub fn get_game_map(&self) -> HashMap<String, Vec<u32>> {
@@ -29,40 +47,27 @@ impl Tracked {
         mapping
     }
 
-    pub fn by_game() {
-        todo!()
+    pub fn by_game(&self, game: String) -> Vec<&ModReference> {
+        let result: Vec<&ModReference> = self
+            .mods
+            .iter()
+            .filter(|item| item.domain_name == game)
+            .collect();
+        result
     }
 
-    pub fn all(db: &kv::Store, nexus: &mut NexusClient) -> Option<Self> {
-        let bucket = TrackedMod::bucket(db).unwrap();
-
-        let mut items: Vec<TrackedMod> = Vec::with_capacity(2500);
-
-        for item in bucket.iter() {
-            let item = item.ok()?;
-            let key: String = item.key().ok()?;
-            let value = item.value::<TrackedMod>().ok()?;
-            println!("key: {}, value: {}", key, value);
-            items.push(value);
-        }
-
-        // TODO a way to refresh this list
-        if !items.is_empty() {
-            return Some(Tracked { mods: items });
+    pub fn all(db: &kv::Store, nexus: &mut NexusClient) -> Option<Box<Self>> {
+        if let Some(found) = Tracked::find(Key::Name("tracked".to_string()), db, nexus) {
+            return Some(found);
         }
 
         match nexus.tracked() {
             Err(_) => None,
             Ok(tracked) => {
-                let total = tracked.mods.iter().fold(0, |acc, tracked_mod| {
-                    if tracked_mod.store(db).is_ok() {
-                        acc + 1
-                    } else {
-                        acc
-                    }
-                });
-                info!("stored {} tracked mods", total);
-                Some(tracked)
+                if tracked.store(db).is_ok() {
+                    info!("stored {} tracked mods", tracked.mods.len());
+                }
+                Some(Box::new(tracked))
             }
         }
     }
@@ -88,11 +93,10 @@ impl Display for Tracked {
     }
 }
 
-impl Cached for TrackedMod {
+impl Cacheable for Tracked {
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
-        let bucket = TrackedMod::bucket(db).unwrap();
-        let compound = format!("{}/{}", self.domain_name, self.mod_id);
-        if bucket.set(&*compound, self.clone()).is_ok() {
+        let bucket = Tracked::bucket(db).unwrap();
+        if bucket.set(&*self.key, self.clone()).is_ok() {
             Ok(1)
         } else {
             Ok(0)
@@ -100,25 +104,24 @@ impl Cached for TrackedMod {
     }
 
     fn find(key: Key, db: &kv::Store, _nexus: &mut NexusClient) -> Option<Box<Self>> {
-        let (game, mod_id) = match key {
-            Key::NameIdPair { name, id } => (name, id),
+        let id = match key {
+            Key::Name(v) => v,
             _ => {
                 return None;
             }
         };
-        let bucket = TrackedMod::bucket(db).unwrap();
-        let compound = format!("{}/{}", game, mod_id);
-        let found = bucket.get(&*compound).ok()?;
-        if let Some(modref) = found {
-            return Some(Box::new(modref));
+        let bucket = Tracked::bucket(db).unwrap();
+        let found = bucket.get(&*id).ok()?;
+        if let Some(modref_list) = found {
+            return Some(Box::new(modref_list));
         }
         None
     }
 
-    fn bucket(store: &kv::Store) -> Option<kv::Bucket<'static, &'static str, TrackedMod>> {
-        match store.bucket::<&str, TrackedMod>(Some("tracked")) {
+    fn bucket(store: &kv::Store) -> Option<kv::Bucket<'static, &'static str, Tracked>> {
+        match store.bucket::<&str, Tracked>(Some("mod_ref_lists")) {
             Err(e) => {
-                error!("Can't open bucket for tracked mods list {:?}", e);
+                error!("Can't open bucket for mod reference lists {:?}", e);
                 None
             }
             Ok(v) => Some(v),
@@ -126,14 +129,8 @@ impl Cached for TrackedMod {
     }
 }
 
-impl Display for TrackedMod {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}: {}", self.domain_name.yellow(), self.mod_id.blue())
-    }
-}
-
 // this has to be auto-generatable with a macro
-impl kv::Value for TrackedMod {
+impl kv::Value for Tracked {
     fn to_raw_value(&self) -> Result<kv::Raw, kv::Error> {
         let x = serde_json::to_vec(&self)?;
         Ok(x.into())

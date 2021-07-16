@@ -1,4 +1,4 @@
-use log::{debug, error, info, warn};
+use log::{error, info};
 use owo_colors::OwoColorize;
 use serde::{Deserialize, Serialize};
 
@@ -17,7 +17,7 @@ pub use user::*;
 // Nexus mod data structs and trait implementations, plus caching layer.
 // More complex structures are broken out into separate files.
 
-pub trait Cached
+pub trait Cacheable
 where
     Self: kv::Value,
 {
@@ -80,7 +80,7 @@ impl kv::Value for GameMetadata {
     }
 }
 
-impl Cached for GameMetadata {
+impl Cacheable for GameMetadata {
     fn find(key: Key, db: &kv::Store, nexus: &mut NexusClient) -> Option<Box<Self>> {
         let id = match key {
             Key::Name(v) => v,
@@ -163,16 +163,4 @@ pub struct EndorsementList {
 #[serde(transparent)]
 pub struct ModInfoList {
     pub mods: Vec<ModInfoFull>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ModReference {
-    pub domain_name: String,
-    pub mod_id: u32,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(transparent)]
-pub struct ModReferenceList {
-    pub mods: Vec<ModReference>,
 }
