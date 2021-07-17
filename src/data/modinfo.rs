@@ -65,6 +65,7 @@ pub enum ModStatus {
     Published,
     Hidden,
     Removed,
+    Wastebinned
 }
 
 impl From<String> for ModStatus {
@@ -74,7 +75,8 @@ impl From<String> for ModStatus {
             "not_published" => ModStatus::NotPublished,
             "published" => ModStatus::Published,
             "removed" => ModStatus::Removed,
-            _ => ModStatus::Removed,
+            "wastebinned" => ModStatus::Wastebinned,
+            _ => ModStatus::NotPublished, // eh
         }
     }
 }
@@ -124,6 +126,39 @@ impl ModInfoFull {
     pub fn name(&self) -> String {
         self.name.clone()
     }
+
+    pub fn category_id(&self) -> u16 {
+        self.category_id
+    }
+
+    pub fn mod_id(&self) -> u32 {
+        self.mod_id
+    }
+
+    pub fn print_compact(&self) {
+        match self.status {
+            ModStatus::Hidden => {
+                print!("    {} <{}> HIDDEN", self.name.green(), self.mod_id.blue());
+            },
+            ModStatus::NotPublished => {
+                print!("    {} <{}> UNPUBLISHED", self.name.green(), self.mod_id.blue());
+            },
+            ModStatus::Published => {
+                print!("    {} <{}>", self.name.green(), self.mod_id.blue());
+            },
+            ModStatus::Removed => {
+                print!("    ! {} (was id #{})", "REMOVED".red(), self.mod_id.blue());
+            },
+            ModStatus::Wastebinned => {
+                print!("    ! {} (was id #{})", "WASTEBINNED".red(), self.mod_id.blue());
+            },
+        }
+        if let Some(endorse) = &self.endorsement {
+            println!(" {}", endorse.endorse_status);
+        } else {
+            println!();
+        }
+    }
 }
 
 impl Default for ModInfoFull {
@@ -162,7 +197,7 @@ impl Display for ModInfoFull {
         write!(
             f,
             "{}\n{} @ {}\nuploaded by {}\n\n{}\n",
-            self.name.yellow(),
+            self.name.green(),
             self.version,
             self.updated_time,
             self.uploaded_by,

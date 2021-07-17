@@ -1,5 +1,7 @@
+use std::collections::HashMap;
+
 use dotenv::dotenv;
-use log::{debug, error, warn};
+use log::{debug, info, warn, error};
 use owo_colors::OwoColorize;
 // use prettytable::Table;
 use serde::Serialize;
@@ -134,11 +136,11 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
             let filtered = tracked.by_game(&game);
             println!(
                 "You are tracking {} mods total and {} for this game.",
-                tracked.mods.len(),
-                filtered.len()
+                tracked.mods.len().blue(),
+                filtered.len().blue()
             );
 
-            println!("Now iterating tracked mods, caching the first 50 found that weren't already cached.");
+            println!("Now iterating tracked mods, caching the first uncached {} found", limit);
 
             let mut mod_iter = filtered.iter();
             let mut item = mod_iter.next();
@@ -149,23 +151,23 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                 let key = (modinfo.domain_name.as_ref(), modinfo.mod_id);
 
                 // Find the next uncached mod.
-                let maybe_mod = if let Some(_) = ModInfoFull::local(key, &store) {
+                let maybe_mod = if ModInfoFull::local(key, &store).is_some() {
                     None
                 } else if let Some(m) = ModInfoFull::fetch(key, &mut nexus) {
+                    m.store(&store)?;
                     fetches += 1;
                     Some(m)
                 } else {
+                    info!(
+                        "   ! unable to find {}/{} for caching",
+                        modinfo.domain_name,
+                        modinfo.mod_id.red()
+                    );
                     None
                 };
 
                 if let Some(fullmod) = maybe_mod {
                     println!("   {} -> cache", fullmod.name().green());
-                } else {
-                    println!(
-                        "   ! unable to find {}/{} for caching",
-                        modinfo.domain_name,
-                        modinfo.mod_id.red()
-                    );
                 }
 
                 if fetches < limit {
@@ -196,20 +198,40 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                     if filtered.is_empty() {
                         println!("You aren't tracking any mods for {}", game.yellow().bold());
                     } else {
-                        let game_meta =
+                        let mut game_meta =
                             find::<GameMetadata, &str>(&game, &store, &mut nexus).unwrap();
                         println!(
                             "You are tracking {} mods for {}.",
-                            filtered.len(),
+                            filtered.len().blue(),
                             game_meta.name().yellow().bold()
                         );
+
+                        // bucket mods by category id
+                        let mut uncached = 0;
+                        let mut cat_map: HashMap<u16, Vec<ModInfoFull>> = HashMap::new();
                         filtered.iter().for_each(|m| {
                             if let Some(mod_info) = ModInfoFull::local((&game, m.mod_id), &store) {
-                                println!("    {}", mod_info.name());
+                                let bucket = cat_map.entry(mod_info.category_id()).or_insert_with(Vec::new);
+                                bucket.push(*mod_info);
                             } else {
-                                println!("    {} (full info not available)", m.mod_id);
+                                uncached += 1
                             }
                         });
+
+                        // TODO order these less than arbitrarily
+                        for (catid, mods) in cat_map.iter() {
+                            if let Some(category) = game_meta.category_from_id(*catid) {
+                                println!("----- {}:", category.name().purple());
+                            } else {
+                                println!("----- category id #{}:", catid.blue());
+                            }
+
+                            mods.iter().for_each(|mod_info| {
+                                mod_info.print_compact();
+                            });
+                        }
+
+                        println!("\nPlus another {} mods that are not yet cached.", uncached.blue());
                     }
                 }
             } else {
