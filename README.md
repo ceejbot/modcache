@@ -6,7 +6,32 @@ Another use case is for me to scan my list of tracked mods to see which ones I h
 
 It remains to be seen how practical it will be to cache mod metadata locally given API rate limits. It might be more practical to scrape their fully-rendered website.
 
-Install Rust for your platform with [rustup](https://rustup.rs). Copy `.env-example` into `.env` and add your api key, which you can find [on the Nexus settings page](https://www.nexusmods.com/users/myaccount?tab=api). Run `cargo run -- help` for usage.
+Install Rust for your platform with [rustup](https://rustup.rs). Copy `.env-example` into `.env` and add your api key, which you can find [on the Nexus settings page](https://www.nexusmods.com/users/myaccount?tab=api). Run `cargo run -- --help` for usage.
+
+```sh
+modcache 0.1.0
+ask questions about nexus mod data
+
+USAGE:
+    modcache [FLAGS] <SUBCOMMAND>
+
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+    -v, --verbose    Pass -v or -vv to increase verbosity
+
+SUBCOMMANDS:
+    endorsements    Fetch the list of mods you've endorsed
+    game            Get Nexus metadata about a game by slug
+    help            Prints this message or the help of the given subcommand(s)
+    latest          Show 10 mods most recently added for a game
+    mod             Fetch info about a mod by id and game
+    populate        Populate the local cache with mods tracked for a specific game
+    tracked         Fetch your list of tracked mods
+    trending        Show the 10 top all-time trending mods for a game
+    updated         Show the 10 mods most recently updated for a game
+    validate        Test your Nexus API key; whoami
+```
 
 ## References
 

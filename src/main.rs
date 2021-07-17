@@ -31,10 +31,14 @@ pub struct Flags {
 
 #[derive(Clone, Serialize, StructOpt)]
 enum Command {
-    /// Populate the local cache, starting either from 0 or from the passed-in mod id
+    /// Populate the local cache with mods tracked for a specific game.
     Populate {
+        /// The game to populate.
         #[structopt(default_value = "skyrimspecialedition")]
         game: String,
+        /// The number of API calls allowed before stopping.
+        #[structopt(default_value = "50")]
+        limit: u16,
     },
     /// Test your Nexus API key; whoami
     Validate,
@@ -50,7 +54,7 @@ enum Command {
         #[structopt(default_value = "skyrimspecialedition")]
         game: String,
     },
-    /// Show the 10 mods top all-time trending mods for a game
+    /// Show the 10 top all-time trending mods for a game
     Trending {
         #[structopt(default_value = "skyrimspecialedition")]
         game: String,
@@ -108,9 +112,9 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                 println!("{}", modinfo);
             }
         }
-        Command::Populate { game } => {
+        Command::Populate { game, limit } => {
             warn!(
-                "EXPENSIVE: populating a local cache for {} with your tracked mods.",
+                "Populating a local cache for {} with your tracked mods, 50 at a time.",
                 game.yellow()
             );
 
@@ -134,12 +138,42 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                 filtered.len()
             );
 
-            filtered.iter().for_each(|modinfo| {
+            println!("Now iterating tracked mods, caching the first 50 found that weren't already cached.");
+
+            let mut mod_iter = filtered.iter();
+            let mut item = mod_iter.next();
+            let mut fetches: u16 = 0;
+
+            while item.is_some() {
+                let modinfo = item.unwrap();
                 let key = (modinfo.domain_name.as_ref(), modinfo.mod_id);
-                if let Some(fullmod) = find::<ModInfoFull, (&str, u32)>(key, &store, &mut nexus) {
+
+                // Find the next uncached mod.
+                let maybe_mod = if let Some(_) = ModInfoFull::local(key, &store) {
+                    None
+                } else if let Some(m) = ModInfoFull::fetch(key, &mut nexus) {
+                    fetches += 1;
+                    Some(m)
+                } else {
+                    None
+                };
+
+                if let Some(fullmod) = maybe_mod {
                     println!("   {} -> cache", fullmod.name().green());
+                } else {
+                    println!(
+                        "   ! unable to find {}/{} for caching",
+                        modinfo.domain_name,
+                        modinfo.mod_id.red()
+                    );
                 }
-            });
+
+                if fetches < limit {
+                    item = mod_iter.next();
+                } else {
+                    item = None;
+                }
+            }
         }
         Command::Validate => {
             if let Some(user) = AuthenticatedUser::fetch("ignored", &mut nexus) {
@@ -170,14 +204,10 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                             game_meta.name().yellow().bold()
                         );
                         filtered.iter().for_each(|m| {
-                            if let Some(mod_info) = find::<ModInfoFull, (&str, u32)>(
-                                (&game, m.mod_id),
-                                &store,
-                                &mut nexus,
-                            ) {
+                            if let Some(mod_info) = ModInfoFull::local((&game, m.mod_id), &store) {
                                 println!("    {}", mod_info.name());
                             } else {
-                                println!("    {} (no info available)", m.mod_id);
+                                println!("    {} (full info not available)", m.mod_id);
                             }
                         });
                     }
