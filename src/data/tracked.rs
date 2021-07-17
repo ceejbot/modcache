@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Display;
 
-use super::{Cacheable, Key};
+use super::Cacheable;
 use crate::nexus::NexusClient;
 
 // Store and retrieve the tracked mods list.
@@ -45,7 +45,7 @@ impl Tracked {
         mapping
     }
 
-    pub fn by_game(&self, game: String) -> Vec<&ModReference> {
+    pub fn by_game(&self, game: &str) -> Vec<&ModReference> {
         let result: Vec<&ModReference> = self
             .mods
             .iter()
@@ -55,7 +55,7 @@ impl Tracked {
     }
 
     pub fn all(db: &kv::Store, nexus: &mut NexusClient) -> Option<Box<Self>> {
-        super::find::<Tracked>(Key::Unused, db, nexus)
+        super::find::<Tracked, ()>((), db, nexus)
     }
 }
 
@@ -79,7 +79,7 @@ impl Display for Tracked {
     }
 }
 
-impl Cacheable for Tracked {
+impl Cacheable<()> for Tracked {
     fn bucket(store: &kv::Store) -> Option<kv::Bucket<'static, &'static str, Tracked>> {
         match store.bucket::<&str, Tracked>(Some("mod_ref_lists")) {
             Err(e) => {
@@ -90,7 +90,7 @@ impl Cacheable for Tracked {
         }
     }
 
-    fn local(_key: Key, db: &kv::Store) -> Option<Box<Self>> {
+    fn local(_key: (), db: &kv::Store) -> Option<Box<Self>> {
         let bucket = Tracked::bucket(db).unwrap();
         let found = bucket.get("tracked").ok()?;
         if let Some(modref_list) = found {
@@ -99,7 +99,7 @@ impl Cacheable for Tracked {
         None
     }
 
-    fn fetch(_key: Key, nexus: &mut NexusClient) -> Option<Box<Self>> {
+    fn fetch(_key: (), nexus: &mut NexusClient) -> Option<Box<Self>> {
         match nexus.tracked() {
             Err(_) => None,
             Ok(tracked) => Some(Box::new(tracked)),

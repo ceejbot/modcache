@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::fmt::Display;
 
 use crate::nexus::NexusClient;
-use crate::{Cacheable, Key};
+use crate::Cacheable;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub enum EndorsementStatus {
@@ -87,7 +87,7 @@ impl EndorsementList {
     }
 
     pub fn all(db: &kv::Store, nexus: &mut NexusClient) -> Option<Box<Self>> {
-        super::find::<Self>(Key::Unused, db, nexus)
+        super::find::<Self, ()>((), db, nexus)
     }
 }
 
@@ -128,7 +128,7 @@ impl Display for EndorsementList {
     }
 }
 
-impl Cacheable for EndorsementList {
+impl Cacheable<()> for EndorsementList {
     fn bucket(db: &kv::Store) -> Option<kv::Bucket<'static, &'static str, Self>> {
         match db.bucket::<&str, EndorsementList>(Some("endorsements")) {
             Err(e) => {
@@ -139,7 +139,7 @@ impl Cacheable for EndorsementList {
         }
     }
 
-    fn local(_key: Key, db: &kv::Store) -> Option<Box<Self>> {
+    fn local(_key: (), db: &kv::Store) -> Option<Box<Self>> {
         let bucket = EndorsementList::bucket(db).unwrap();
         let found = bucket.get("endorsements").ok()?;
         if let Some(modref_list) = found {
@@ -148,7 +148,7 @@ impl Cacheable for EndorsementList {
         None
     }
 
-    fn fetch(_key: Key, nexus: &mut crate::nexus::NexusClient) -> Option<Box<Self>> {
+    fn fetch(_key: (), nexus: &mut crate::nexus::NexusClient) -> Option<Box<Self>> {
         match nexus.endorsements() {
             Err(_) => None,
             Ok(v) => Some(Box::new(v)),

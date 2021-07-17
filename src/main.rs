@@ -39,7 +39,10 @@ enum Command {
     /// Test your Nexus API key; whoami
     Validate,
     /// Fetch your list of tracked mods
-    Tracked,
+    Tracked {
+        #[structopt(default_value = "all")]
+        game: String,
+    },
     /// Fetch the list of mods you've endorsed
     Endorsements,
     /// Get Nexus metadata about a game by slug
@@ -93,20 +96,15 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
 
     match flags.cmd {
         Command::Game { game } => {
-            if let Some(metadata) = find::<GameMetadata>(Key::Name(game), &store, &mut nexus) {
+            if let Some(metadata) = find::<GameMetadata, &str>(&game, &store, &mut nexus) {
                 let pretty = serde_json::to_string_pretty(&metadata)?;
                 println!("{}", pretty);
             }
         }
         Command::Mod { game, mod_id } => {
-            if let Some(modinfo) = find::<ModInfoFull>(
-                Key::NameIdPair {
-                    name: game,
-                    id: mod_id,
-                },
-                &store,
-                &mut nexus,
-            ) {
+            if let Some(modinfo) =
+                find::<ModInfoFull, (&str, u32)>((&game, mod_id), &store, &mut nexus)
+            {
                 println!("{}", modinfo);
             }
         }
@@ -116,7 +114,7 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                 game.yellow()
             );
 
-            let gamemeta = find::<GameMetadata>(Key::Name(game.to_string()), &store, &mut nexus);
+            let gamemeta = find::<GameMetadata, &str>(&game, &store, &mut nexus);
 
             if gamemeta.is_none() {
                 warn!("{} can't be found on the Nexus! Bailing.", game);
@@ -129,7 +127,7 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                 anyhow::bail!("Unable to fetch any tracked mods.");
             }
             let tracked = tracked.unwrap();
-            let filtered = tracked.by_game(game);
+            let filtered = tracked.by_game(&game);
             println!(
                 "You are tracking {} mods total and {} for this game.",
                 tracked.mods.len(),
@@ -137,19 +135,14 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
             );
 
             filtered.iter().for_each(|modinfo| {
-                let key = Key::NameIdPair {
-                    name: modinfo.domain_name.clone(),
-                    id: modinfo.mod_id,
-                };
-                if let Some(fullmod) = find::<ModInfoFull>(key, &store, &mut nexus) {
+                let key = (modinfo.domain_name.as_ref(), modinfo.mod_id);
+                if let Some(fullmod) = find::<ModInfoFull, (&str, u32)>(key, &store, &mut nexus) {
                     println!("   {} -> cache", fullmod.name().green());
                 }
             });
         }
         Command::Validate => {
-            if let Some(user) =
-                AuthenticatedUser::fetch(Key::Name("authed_user".to_string()), &mut nexus)
-            {
+            if let Some(user) = AuthenticatedUser::fetch("ignored", &mut nexus) {
                 println!("You are logged in as:\n{}", user);
                 println!(
                     "\nYou have {} requests remaining this hour and {} for today.",
@@ -160,9 +153,35 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                 warn!("Something went wrong validating your API key.")
             }
         }
-        Command::Tracked => {
+        Command::Tracked { game } => {
             if let Some(tracked) = Tracked::all(&store, &mut nexus) {
-                println!("{}", tracked);
+                if game == "all" {
+                    println!("{}", tracked);
+                } else {
+                    let filtered = tracked.by_game(&game);
+                    if filtered.is_empty() {
+                        println!("You aren't tracking any mods for {}", game.yellow().bold());
+                    } else {
+                        let game_meta =
+                            find::<GameMetadata, &str>(&game, &store, &mut nexus).unwrap();
+                        println!(
+                            "You are tracking {} mods for {}.",
+                            filtered.len(),
+                            game_meta.name().yellow().bold()
+                        );
+                        filtered.iter().for_each(|m| {
+                            if let Some(mod_info) = find::<ModInfoFull, (&str, u32)>(
+                                (&game, m.mod_id),
+                                &store,
+                                &mut nexus,
+                            ) {
+                                println!("    {}", mod_info.name());
+                            } else {
+                                println!("    {} (no info available)", m.mod_id);
+                            }
+                        });
+                    }
+                }
             } else {
                 error!("Something went wrong fetching tracked mods. Rerun with -v to get more details.");
             }

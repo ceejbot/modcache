@@ -1,11 +1,11 @@
-use log::{error, info};
+use log::error;
 use owo_colors::OwoColorize;
 use serde::{Deserialize, Serialize};
 
 use std::fmt::Display;
 
 use crate::nexus::NexusClient;
-use crate::{Cacheable, Key};
+use crate::Cacheable;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ModCategory {
@@ -41,6 +41,12 @@ pub struct GameMetadata {
     nexusmods_url: String,
 }
 
+impl GameMetadata {
+    pub fn name(&self) -> String {
+        self.name.clone()
+    }
+}
+
 impl kv::Value for GameMetadata {
     fn to_raw_value(&self) -> Result<kv::Raw, kv::Error> {
         let x = serde_json::to_vec(&self)?;
@@ -53,7 +59,7 @@ impl kv::Value for GameMetadata {
     }
 }
 
-impl Cacheable for GameMetadata {
+impl Cacheable<&str> for GameMetadata {
     fn bucket(db: &kv::Store) -> Option<kv::Bucket<'static, &'static str, Self>> {
         match db.bucket::<&str, Self>(Some("games")) {
             Err(e) => {
@@ -64,31 +70,14 @@ impl Cacheable for GameMetadata {
         }
     }
 
-    fn local(key: Key, db: &kv::Store) -> Option<Box<Self>> {
-        let id = match key {
-            Key::Name(v) => v,
-            _ => {
-                return None;
-            }
-        };
+    fn local(key: &str, db: &kv::Store) -> Option<Box<Self>> {
         let bucket = GameMetadata::bucket(db).unwrap();
-        let found = bucket.get(&*id).ok()?;
-        if let Some(game) = found {
-            info!("cache hit for {}", id);
-            Some(Box::new(game))
-        } else {
-            None
-        }
+        let found = bucket.get(key).ok()?;
+        found.map(Box::new)
     }
 
-    fn fetch(key: Key, nexus: &mut NexusClient) -> Option<Box<Self>> {
-        let id = match key {
-            Key::Name(v) => v,
-            _ => {
-                return None;
-            }
-        };
-        if let Ok(game) = nexus.gameinfo(&id) {
+    fn fetch(key: &str, nexus: &mut NexusClient) -> Option<Box<Self>> {
+        if let Ok(game) = nexus.gameinfo(key) {
             Some(Box::new(game))
         } else {
             None

@@ -1,14 +1,14 @@
 // All structs and trait impls supporting the full mod info response from the Nexus.
 
 use chrono::Utc;
-use log::{error, info};
+use log::error;
 use owo_colors::OwoColorize;
 use serde::{Deserialize, Serialize};
 
 use std::fmt::Display;
 
 use crate::nexus::NexusClient;
-use crate::{Cacheable, EndorsementStatus, Key};
+use crate::{Cacheable, EndorsementStatus};
 
 #[derive(serde::Deserialize, Serialize, Debug, Clone)]
 pub struct ModAuthor {
@@ -183,7 +183,7 @@ impl kv::Value for ModInfoFull {
     }
 }
 
-impl Cacheable for ModInfoFull {
+impl Cacheable<(&str, u32)> for ModInfoFull {
     fn bucket(db: &kv::Store) -> Option<kv::Bucket<'static, &'static str, Self>> {
         match db.bucket::<&str, Self>(Some("mods")) {
             Err(e) => {
@@ -194,33 +194,15 @@ impl Cacheable for ModInfoFull {
         }
     }
 
-    fn local(key: Key, db: &kv::Store) -> Option<Box<Self>> {
-        let (game, mod_id) = match key {
-            Key::NameIdPair { name, id } => (name, id),
-            _ => {
-                return None;
-            }
-        };
-        let compound = format!("{}/{}", game, mod_id);
+    fn local(key: (&str, u32), db: &kv::Store) -> Option<Box<Self>> {
+        let compound = format!("{}/{}", key.0, key.1);
         let bucket = ModInfoFull::bucket(db).unwrap();
         let found = bucket.get(&*compound).ok()?;
-        if let Some(modinfo) = found {
-            info!("cache hit for {}", compound);
-            Some(Box::new(modinfo))
-        } else {
-            None
-        }
+        found.map(Box::new)
     }
 
-    fn fetch(key: Key, nexus: &mut NexusClient) -> Option<Box<Self>> {
-        let (game, mod_id) = match key {
-            Key::NameIdPair { name, id } => (name, id),
-            _ => {
-                return None;
-            }
-        };
-
-        if let Ok(modinfo) = nexus.mod_by_id(&game, mod_id) {
+    fn fetch(key: (&str, u32), nexus: &mut NexusClient) -> Option<Box<Self>> {
+        if let Ok(modinfo) = nexus.mod_by_id(key.0, key.1) {
             Some(Box::new(modinfo))
         } else {
             None

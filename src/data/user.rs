@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::fmt::Display;
 
 use crate::nexus::NexusClient;
-use crate::{Cacheable, Key};
+use crate::Cacheable;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct AuthenticatedUser {
@@ -47,7 +47,7 @@ impl kv::Value for AuthenticatedUser {
     }
 }
 
-impl Cacheable for AuthenticatedUser {
+impl Cacheable<&str> for AuthenticatedUser {
     fn bucket(db: &kv::Store) -> Option<kv::Bucket<'static, &'static str, Self>> {
         match db.bucket::<&str, Self>(Some("authed_users")) {
             Err(e) => {
@@ -58,20 +58,13 @@ impl Cacheable for AuthenticatedUser {
         }
     }
 
-    fn local(key: Key, db: &kv::Store) -> Option<Box<Self>> {
-        let id = match key {
-            Key::Name(v) => v,
-            _ => {
-                return None;
-            }
-        };
-
+    fn local(key: &str, db: &kv::Store) -> Option<Box<Self>> {
         let bucket = AuthenticatedUser::bucket(db).unwrap();
-        let found = bucket.get(&*id).ok()?;
+        let found = bucket.get(key).ok()?;
         found.map(Box::new)
     }
 
-    fn fetch(_key: Key, nexus: &mut NexusClient) -> Option<Box<Self>> {
+    fn fetch(_key: &str, nexus: &mut NexusClient) -> Option<Box<Self>> {
         if let Ok(user) = nexus.validate() {
             Some(Box::new(user))
         } else {

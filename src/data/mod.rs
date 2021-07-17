@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use log::info;
 use serde::{Deserialize, Serialize};
 
@@ -19,9 +21,10 @@ use crate::nexus::NexusClient;
 // More complex structures are broken out into separate files.
 
 /// Get the item, looking in local cache first then calling to the Nexus if not found.
-pub fn find<T>(key: Key, db: &kv::Store, nexus: &mut NexusClient) -> Option<Box<T>>
+// This isn't great yet, I guess, what with the attack of the clones.
+pub fn find<T, K: Debug + Clone>(key: K, db: &kv::Store, nexus: &mut NexusClient) -> Option<Box<T>>
 where
-    T: Cacheable,
+    T: Cacheable<K>,
 {
     if let Some(found) = T::local(key.clone(), db) {
         info!("cache hit for {:?}", key);
@@ -37,26 +40,18 @@ where
     None
 }
 
-pub trait Cacheable
+pub trait Cacheable<T>
 where
     Self: kv::Value,
 {
     /// Get the kv/sled bucket where these items are stored.
     fn bucket(db: &kv::Store) -> Option<kv::Bucket<'static, &'static str, Self>>;
     /// Look for the item locally.
-    fn local(key: Key, db: &kv::Store) -> Option<Box<Self>>;
+    fn local(key: T, db: &kv::Store) -> Option<Box<Self>>;
     /// Fetch this item from the Nexus.
-    fn fetch(key: Key, nexus: &mut NexusClient) -> Option<Box<Self>>;
+    fn fetch(key: T, nexus: &mut NexusClient) -> Option<Box<Self>>;
     /// Store this item in local cache.
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize>;
-}
-
-#[derive(Debug, Clone)]
-pub enum Key {
-    Name(String),
-    IntId(u32),
-    NameIdPair { name: String, id: u32 },
-    Unused,
 }
 
 // no home for this structure yet; it's used by several nexus fetches
