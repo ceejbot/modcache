@@ -1,5 +1,5 @@
 use dotenv::dotenv;
-use log::{debug, warn, error};
+use log::{debug, error, warn};
 use owo_colors::OwoColorize;
 // use prettytable::Table;
 use serde::Serialize;
@@ -111,53 +111,51 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
             }
         }
         Command::Populate { game } => {
-            warn!("EXPENSIVE: populating a local cache for {} with your tracked mods.", game.yellow());
+            warn!(
+                "EXPENSIVE: populating a local cache for {} with your tracked mods.",
+                game.yellow()
+            );
+
+            let gamemeta = find::<GameMetadata>(Key::Name(game.to_string()), &store, &mut nexus);
+
+            if gamemeta.is_none() {
+                warn!("{} can't be found on the Nexus! Bailing.", game);
+                return Ok(());
+            }
+            // let gamemeta = gamemeta.unwrap();
+
             let tracked = Tracked::all(&store, &mut nexus);
             if tracked.is_none() {
                 anyhow::bail!("Unable to fetch any tracked mods.");
             }
             let tracked = tracked.unwrap();
-            println!("You are tracking {} mods for this game.", tracked.mods.len());
-            let mapped = tracked.get_game_map();
+            let filtered = tracked.by_game(game);
+            println!(
+                "You are tracking {} mods total and {} for this game.",
+                tracked.mods.len(),
+                filtered.len()
+            );
 
-            // First get metadata for all our games.
-            for (key, val) in mapped.iter() {
-                println!(
-                    "Populating {} tracked mods for {}",
-                    val.len().bold(),
-                    key.yellow().bold()
-                );
-                if find::<GameMetadata>(Key::Name(key.to_string()), &store, &mut nexus).is_some() {
-                    debug!("    {} metadata now in cache", key.yellow().bold());
+            filtered.iter().for_each(|modinfo| {
+                let key = Key::NameIdPair {
+                    name: modinfo.domain_name.clone(),
+                    id: modinfo.mod_id,
+                };
+                if let Some(fullmod) = find::<ModInfoFull>(key, &store, &mut nexus) {
+                    println!("   {} -> cache", fullmod.name().green());
                 }
-                /*
-                // Now walk all mod_ids in the vec and store those. Except skyrim for now.
-                if key == "skyrimspecialedition" {
-                    continue;
-                }
-                let mut count = 0;
-                val.iter().for_each(|id| {
-                    if let Some(modinfo) = ModInfoFull::find(
-                        Key::NameIdPair {
-                            name: key.clone(),
-                            id: *id,
-                        },
-                        &store,
-                        &mut nexus,
-                    ) {
-                        count += 1;
-                        println!("{}", modinfo);
-                    }
-                });
-                println!("   cached data for {} mods", count);
-                */
-            }
+            });
         }
         Command::Validate => {
             if let Some(user) =
                 AuthenticatedUser::fetch(Key::Name("authed_user".to_string()), &mut nexus)
             {
-                warn!("You are logged in as:\n{}", user);
+                println!("You are logged in as:\n{}", user);
+                println!(
+                    "\nYou have {} requests remaining this hour and {} for today.",
+                    nexus.remaining_hour().bold(),
+                    nexus.remaining_day().bold()
+                );
             } else {
                 warn!("Something went wrong validating your API key.")
             }
@@ -166,14 +164,14 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
             if let Some(tracked) = Tracked::all(&store, &mut nexus) {
                 println!("{}", tracked);
             } else {
-                println!("Something went wrong fetching tracked mods. Rerun with -v to get more details.");
+                error!("Something went wrong fetching tracked mods. Rerun with -v to get more details.");
             }
         }
         Command::Endorsements => {
             if let Some(opinions) = EndorsementList::all(&store, &mut nexus) {
-                println!{"{}", opinions};
+                println! {"{}", opinions};
             } else {
-                println!("Something went wrong fetching endorsements. Rerun with -v to get more details.");
+                error!("Something went wrong fetching endorsements. Rerun with -v to get more details.");
             }
         }
         Command::Trending { game } => {

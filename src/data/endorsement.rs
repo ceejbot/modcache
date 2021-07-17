@@ -1,7 +1,7 @@
 use log::error;
 use owo_colors::OwoColorize;
-use serde::{Deserialize, Serialize};
 use prettytable::{cell, row, Table};
+use serde::{Deserialize, Serialize};
 
 use std::collections::HashMap;
 use std::fmt::Display;
@@ -101,22 +101,25 @@ impl Display for EndorsementList {
             mapping.len().blue()
         )?;
 
-         // This display is pretty useless, but leaving it for now.
-         for (k, v) in mapping.iter() {
+        // This display is pretty useless, but leaving it for now.
+        for (k, v) in mapping.iter() {
             // TODO look up the game referenced. Which requires figuring out how to get the data *here*.
             let mut table = Table::new();
             table.set_format(*prettytable::format::consts::FORMAT_CLEAN);
-                let countstr = if v.len() == 1 {
-                    "one mod".to_string()
-                } else {
-                    format!("{} mods", v.len().bold())
-                };
-                table.add_row(row![ k.yellow().bold(), countstr ]);
+            let countstr = if v.len() == 1 {
+                "one mod".to_string()
+            } else {
+                format!("{} mods", v.len().bold())
+            };
+            table.add_row(row![k.yellow().bold(), countstr]);
             v.iter().for_each(|opinion| {
                 // TODO! Look up the mod referenced.
                 table.add_row(row![
                     format!("{}", opinion.status()),
-                    format!("https://www.nexusmods.com/{}/mods/{}", opinion.domain_name, opinion.mod_id),
+                    format!(
+                        "https://www.nexusmods.com/{}/mods/{}",
+                        opinion.domain_name, opinion.mod_id
+                    ),
                 ]);
             });
             writeln!(f, "{}", table)?;

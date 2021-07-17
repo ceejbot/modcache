@@ -56,6 +56,14 @@ impl NexusClient {
         }
     }
 
+    pub fn remaining_hour(&self) -> u16 {
+        self.limits.hourly_remaining
+    }
+
+    pub fn remaining_day(&self) -> u16 {
+        self.limits.daily_remaining
+    }
+
     fn make_request<T: for<'de> Deserialize<'de>>(
         &mut self,
         uri: &str,

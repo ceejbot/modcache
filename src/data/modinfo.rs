@@ -120,6 +120,10 @@ impl ModInfoFull {
     pub fn available(&self) -> bool {
         self.available
     }
+
+    pub fn name(&self) -> String {
+        self.name.clone()
+    }
 }
 
 impl Default for ModInfoFull {
