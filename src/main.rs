@@ -111,13 +111,13 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
             }
         }
         Command::Populate { game } => {
-            warn!("TODO: populate a local cache for {}", game.yellow());
+            warn!("EXPENSIVE: populating a local cache for {} with your tracked mods.", game.yellow());
             let tracked = Tracked::all(&store, &mut nexus);
             if tracked.is_none() {
                 anyhow::bail!("Unable to fetch any tracked mods.");
             }
             let tracked = tracked.unwrap();
-            println!("You are tracking {} mods.", tracked.mods.len());
+            println!("You are tracking {} mods for this game.", tracked.mods.len());
             let mapped = tracked.get_game_map();
 
             // First get metadata for all our games.

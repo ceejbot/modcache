@@ -89,7 +89,7 @@ pub struct ModInfoFull {
     #[serde(default)]
     summary: String,
     #[serde(default)]
-    picture_url: String, // valid URL if present
+    picture_url: Option<String>, // valid URL if present
     version: String, // no enforcement of semver
 
     author: String, // arbitrary text for credit
@@ -129,7 +129,7 @@ impl Default for ModInfoFull {
             mod_id: 0,
             name: "".to_string(),
             summary: "".to_string(),
-            picture_url: "".to_string(),
+            picture_url: None,
             version: "".to_string(),
             author: "".to_string(),
             uploaded_by: "".to_string(),
