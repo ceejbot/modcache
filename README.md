@@ -17,6 +17,8 @@ USAGE:
 
 FLAGS:
     -h, --help       Prints help information
+    -j, --json       dump full output as json; not applicable everywhere
+    -r, --refresh    refresh data from the Nexus; not applicable everywhere
     -V, --version    Prints version information
     -v, --verbose    Pass -v or -vv to increase verbosity
 
@@ -25,10 +27,12 @@ SUBCOMMANDS:
     game            Get Nexus metadata about a game by slug
     help            Prints this message or the help of the given subcommand(s)
     latest          Show 10 mods most recently added for a game
-    mod             Fetch info about a mod by id and game
+    mod             Display detailed info for a single mod
     populate        Populate the local cache with mods tracked for a specific game
+    track           Track a specific mod
     tracked         Fetch your list of tracked mods
     trending        Show the 10 top all-time trending mods for a game
+    untrack         Stop tracking a mod
     updated         Show the 10 mods most recently updated for a game
     validate        Test your Nexus API key; whoami
 ```

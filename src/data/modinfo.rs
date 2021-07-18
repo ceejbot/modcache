@@ -60,25 +60,12 @@ impl Default for ModEndorsement {
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "snake_case")]
 pub enum ModStatus {
-    #[serde()]
+    Hidden,
     NotPublished,
     Published,
-    Hidden,
     Removed,
+    UnderModeration,
     Wastebinned,
-}
-
-impl From<String> for ModStatus {
-    fn from(s: String) -> Self {
-        match s.as_ref() {
-            "hidden" => ModStatus::Hidden,
-            "not_published" => ModStatus::NotPublished,
-            "published" => ModStatus::Published,
-            "removed" => ModStatus::Removed,
-            "wastebinned" => ModStatus::Wastebinned,
-            _ => ModStatus::NotPublished, // eh
-        }
-    }
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -158,6 +145,9 @@ impl ModInfoFull {
             }
             ModStatus::Removed => {
                 format!("{} {}", n.blue(), "REMOVED".red())
+            }
+            ModStatus::UnderModeration => {
+                format!("{} {}", n.blue(), "MODERATED".red())
             }
             ModStatus::Wastebinned => {
                 format!("{} {}", n.blue(), "WASTEBINNED".red())

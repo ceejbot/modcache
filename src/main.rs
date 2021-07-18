@@ -33,13 +33,13 @@ pub struct Flags {
     #[structopt(
         short,
         long,
-        help = "dump full output as json; not applicable everywhere"
+        help = "Emit full output as json; not applicable everywhere"
     )]
     json: bool,
     #[structopt(
         short,
         long,
-        help = "refresh data from the Nexus; not applicable everywhere"
+        help = "Refresh data from the Nexus; not applicable everywhere"
     )]
     refresh: bool,
     #[structopt(subcommand)]
@@ -173,13 +173,7 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
             }
         }
         Command::Populate { game, limit } => {
-            warn!(
-                "Populating a local cache for {} with your tracked mods, 50 at a time.",
-                game.yellow()
-            );
-
             let gamemeta = find::<GameMetadata, &str>(&game, &store, &mut nexus);
-
             if gamemeta.is_none() {
                 warn!("{} can't be found on the Nexus! Bailing.", game);
                 return Ok(());
@@ -356,6 +350,12 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
         },
         Command::Endorsements => {
             if let Some(opinions) = EndorsementList::all(&store, &mut nexus) {
+                if flags.json {
+                    let pretty = serde_json::to_string_pretty(&opinions)?;
+                    println!("{}", pretty);
+                    return Ok(());
+                }
+
                 let mapping = opinions.get_game_map();
                 println!(
                     "\n{} mods opinionated upon for {} games\n",
@@ -398,6 +398,12 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
         }
         Command::Trending { game } => {
             let res = nexus.trending(&game)?;
+            if flags.json {
+                let pretty = serde_json::to_string_pretty(&res)?;
+                println!("{}", pretty);
+                return Ok(());
+            }
+
             for item in res.mods.into_iter() {
                 println!("{}", item);
                 // never waste an opportunity to cache!
@@ -408,6 +414,11 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
         }
         Command::Latest { game } => {
             let res = nexus.latest_added(&game)?;
+            if flags.json {
+                let pretty = serde_json::to_string_pretty(&res)?;
+                println!("{}", pretty);
+                return Ok(());
+            }
             for item in res.mods.into_iter() {
                 if item.available() {
                     println!("{}", item);
@@ -419,6 +430,11 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
         }
         Command::Updated { game } => {
             let res = nexus.latest_updated(&game)?;
+            if flags.json {
+                let pretty = serde_json::to_string_pretty(&res)?;
+                println!("{}", pretty);
+                return Ok(());
+            }
             for item in res.mods.into_iter() {
                 println!("{}", item);
                 if item.store(&store).is_err() {
