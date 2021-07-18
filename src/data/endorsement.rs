@@ -39,6 +39,17 @@ impl UserEndorsement {
     pub fn status(&self) -> &EndorsementStatus {
         &self.status
     }
+
+    pub fn mod_id(&self) -> u32 {
+        self.mod_id
+    }
+
+    pub fn get_url(&self) -> String {
+        format!(
+            "https://www.nexusmods.com/{}/mods/{}",
+            self.domain_name, self.mod_id
+        )
+    }
 }
 
 impl Display for UserEndorsement {
@@ -114,6 +125,7 @@ impl Display for EndorsementList {
             table.add_row(row![k.yellow().bold(), countstr]);
             v.iter().for_each(|opinion| {
                 // TODO! Look up the mod referenced.
+                // printf '\e]8;;http://example.com\e\\This is a link\e]8;;\e\\n'
                 table.add_row(row![
                     format!("{}", opinion.status()),
                     format!(

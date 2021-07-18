@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use dotenv::dotenv;
 use log::{debug, error, info, warn};
 use owo_colors::OwoColorize;
-// use prettytable::Table;
+use prettytable::{cell, row, Table};
 use serde::Serialize;
 use structopt::clap::AppSettings::*;
 use structopt::StructOpt;
@@ -267,7 +267,36 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
         }
         Command::Endorsements => {
             if let Some(opinions) = EndorsementList::all(&store, &mut nexus) {
-                println! {"{}", opinions};
+                let mapping = opinions.get_game_map();
+                println!(
+                    "\n{} mods opinionated upon for {} games\n",
+                    opinions.mods.len().red(),
+                    mapping.len().blue()
+                );
+
+                for (game, modlist) in mapping.iter() {
+                    let game_meta =
+                        find::<GameMetadata, &str>(game, &store, &mut nexus).unwrap();
+                    println!("Endorsements for {}:", game_meta.name().yellow().bold());
+                    let mut table = Table::new();
+                    table.set_format(*prettytable::format::consts::FORMAT_CLEAN);
+                    modlist.iter().for_each(|opinion| {
+                        if let Some(mod_info) = ModInfoFull::local((game, opinion.mod_id()), &store) {
+                            table.add_row(row![
+                                format!("{}", opinion.status()),
+                                format!("\x1b]8;;{}\x1b\\{}\x1b]8m;;\x1b\\", opinion.get_url(), mod_info.name().green()),
+                            ]);
+                        } else {
+                            table.add_row(row![
+                                format!("{}", opinion.status()),
+                                format!("\x1b]8;;{}\x1b\\mod id #{}\x1b]8m;;\x1b\\", opinion.get_url(), opinion.mod_id()),
+                            ]);
+                        }
+                        // \x1b[
+                        // printf '\e]8;;http://example.com\e\\This is a link\e]8;;\e\\n'
+                    });
+                    println!("{}", table);
+                }
             } else {
                 error!("Something went wrong fetching endorsements. Rerun with -v to get more details.");
             }
