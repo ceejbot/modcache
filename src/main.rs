@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use dotenv::dotenv;
-use log::{debug, info, warn, error};
+use log::{debug, error, info, warn};
 use owo_colors::OwoColorize;
 // use prettytable::Table;
 use serde::Serialize;
@@ -140,7 +140,10 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                 filtered.len().blue()
             );
 
-            println!("Now iterating tracked mods, caching the first uncached {} found", limit);
+            println!(
+                "Now iterating tracked mods, caching the first uncached {} found",
+                limit
+            );
 
             let mut mod_iter = filtered.iter();
             let mut item = mod_iter.next();
@@ -200,19 +203,27 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                     } else {
                         let mut game_meta =
                             find::<GameMetadata, &str>(&game, &store, &mut nexus).unwrap();
-                        println!(
-                            "You are tracking {} mods for {}.",
-                            filtered.len().blue(),
-                            game_meta.name().yellow().bold()
-                        );
-
-                        // bucket mods by category id
+                        // bucket mods by category, treating removed and wastebinned mods separately.
                         let mut uncached = 0;
+                        let mut wasted: Vec<ModInfoFull> = Vec::new();
+                        let mut removed: Vec<ModInfoFull> = Vec::new();
                         let mut cat_map: HashMap<u16, Vec<ModInfoFull>> = HashMap::new();
                         filtered.iter().for_each(|m| {
                             if let Some(mod_info) = ModInfoFull::local((&game, m.mod_id), &store) {
-                                let bucket = cat_map.entry(mod_info.category_id()).or_insert_with(Vec::new);
-                                bucket.push(*mod_info);
+                                let bucket = cat_map
+                                    .entry(mod_info.category_id())
+                                    .or_insert_with(Vec::new);
+                                match mod_info.status() {
+                                    ModStatus::Wastebinned => {
+                                        wasted.push(*mod_info);
+                                    }
+                                    ModStatus::Removed => {
+                                        removed.push(*mod_info);
+                                    }
+                                    _ => {
+                                        bucket.push(*mod_info);
+                                    }
+                                }
                             } else {
                                 uncached += 1
                             }
@@ -231,7 +242,23 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                             });
                         }
 
-                        println!("\nPlus another {} mods that are not yet cached.", uncached.blue());
+                        println!(
+                            "\nYou are tracking {} mods for {}.",
+                            filtered.len().blue(),
+                            game_meta.name().yellow().bold()
+                        );
+                        print!("\n{} mods are marked as removed: ", removed.len().blue());
+                        removed.iter().for_each(|xs| print!("{} ", xs.mod_id()));
+                        print!(
+                            "\n{} mods were wasted by their authors: ",
+                            wasted.len().blue()
+                        );
+                        wasted.iter().for_each(|xs| print!("{} ", xs.mod_id()));
+                        println!(
+                            "\n\n{} tracked mods are in cache.",
+                            (filtered.len() - uncached).blue()
+                        );
+                        println!("Another {} mods are not yet cached.", uncached.blue());
                     }
                 }
             } else {

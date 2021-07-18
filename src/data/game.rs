@@ -47,7 +47,7 @@ pub struct GameMetadata {
     name: String,
     nexusmods_url: String,
     #[serde(skip)]
-    category_map: Option<HashMap<u16, ModCategory>>
+    category_map: Option<HashMap<u16, ModCategory>>,
 }
 
 impl Default for GameMetadata {
@@ -79,14 +79,16 @@ impl GameMetadata {
 
     pub fn category_from_id(&mut self, id: u16) -> Option<ModCategory> {
         if self.category_map.is_none() {
-            let m: HashMap<u16, ModCategory> = self.categories.iter().map(|xs| (xs.category_id, xs.clone())).collect();
+            let m: HashMap<u16, ModCategory> = self
+                .categories
+                .iter()
+                .map(|xs| (xs.category_id, xs.clone()))
+                .collect();
             self.category_map = Some(m);
         }
 
         match &self.category_map {
-            Some(m) => {
-                m.get(&id).cloned()
-            }
+            Some(m) => m.get(&id).cloned(),
             None => None,
         }
     }
