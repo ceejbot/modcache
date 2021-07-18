@@ -1,6 +1,5 @@
 use log::error;
 use owo_colors::OwoColorize;
-use prettytable::{cell, row, Table};
 use serde::{Deserialize, Serialize};
 
 use std::collections::HashMap;
@@ -16,11 +15,21 @@ pub enum EndorsementStatus {
     Abstained,
 }
 
+impl EndorsementStatus {
+    pub fn display_for_tracked(&self) -> String {
+        match self {
+            EndorsementStatus::Endorsed => "👍🏻".to_string(),
+            EndorsementStatus::Undecided => "".to_string(),
+            _ => "🚫".to_string(),
+        }
+    }
+}
+
 impl Display for EndorsementStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            EndorsementStatus::Endorsed => write!(f, "👍🏻"),
-            EndorsementStatus::Undecided => write!(f, " "),
+            EndorsementStatus::Endorsed => write!(f, " "),
+            EndorsementStatus::Undecided => write!(f, "🤔"),
             _ => write!(f, "🚫"),
         }
     }
@@ -110,33 +119,7 @@ impl Display for EndorsementList {
             "\n{} mods opinionated upon for {} games\n",
             self.mods.len().red(),
             mapping.len().blue()
-        )?;
-
-        // This display is pretty useless, but leaving it for now.
-        for (k, v) in mapping.iter() {
-            // TODO look up the game referenced. Which requires figuring out how to get the data *here*.
-            let mut table = Table::new();
-            table.set_format(*prettytable::format::consts::FORMAT_CLEAN);
-            let countstr = if v.len() == 1 {
-                "one mod".to_string()
-            } else {
-                format!("{} mods", v.len().bold())
-            };
-            table.add_row(row![k.yellow().bold(), countstr]);
-            v.iter().for_each(|opinion| {
-                // TODO! Look up the mod referenced.
-                // printf '\e]8;;http://example.com\e\\This is a link\e]8;;\e\\n'
-                table.add_row(row![
-                    format!("{}", opinion.status()),
-                    format!(
-                        "https://www.nexusmods.com/{}/mods/{}",
-                        opinion.domain_name, opinion.mod_id
-                    ),
-                ]);
-            });
-            writeln!(f, "{}", table)?;
-        }
-        Ok(())
+        )
     }
 }
 

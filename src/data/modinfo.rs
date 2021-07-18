@@ -139,36 +139,37 @@ impl ModInfoFull {
         self.status.clone()
     }
 
-    pub fn print_compact(&self) {
+    pub fn display_name(&self) -> String {
+        let n = if self.name.is_empty() {
+            format!("id #{}", self.mod_id)
+        } else {
+            self.name()
+        };
+
         match self.status {
             ModStatus::Hidden => {
-                print!("    {} <{}> HIDDEN", self.name.green(), self.mod_id.blue());
+                format!("{} {}", n.blue(), "HIDDEN".red())
             }
             ModStatus::NotPublished => {
-                print!(
-                    "    {} <{}> UNPUBLISHED",
-                    self.name.green(),
-                    self.mod_id.blue()
-                );
+                format!("{} {}", n.green(), "UNPUBLISHED".red())
             }
             ModStatus::Published => {
-                print!("    {} <{}>", self.name.green(), self.mod_id.blue());
+                format!("{}", n.green())
             }
             ModStatus::Removed => {
-                print!("    ! {} (was id #{})", "REMOVED".red(), self.mod_id.blue());
+                format!("{} {}", n.blue(), "REMOVED".red())
             }
             ModStatus::Wastebinned => {
-                print!(
-                    "    ! {} (was id #{})",
-                    "WASTEBINNED".red(),
-                    self.mod_id.blue()
-                );
+                format!("{} {}", n.blue(), "WASTEBINNED".red())
             }
         }
+    }
+
+    pub fn print_compact(&self) {
         if let Some(endorse) = &self.endorsement {
-            println!(" {}", endorse.endorse_status);
+            println!("    {} {}", self.display_name(), endorse.endorse_status.display_for_tracked());
         } else {
-            println!();
+            println!("    {}", self.display_name());
         }
     }
 }

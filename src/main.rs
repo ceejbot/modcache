@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use dotenv::dotenv;
+use itertools::Itertools;
 use log::{debug, error, info, warn};
 use owo_colors::OwoColorize;
 use prettytable::{cell, row, Table};
@@ -71,10 +72,11 @@ enum Command {
         #[structopt(default_value = "skyrimspecialedition")]
         game: String,
     },
-    /// Fetch info about a mod by id and game
+    /// Display detailed info for a single mod
     Mod {
-        #[structopt(long, short, default_value = "skyrimspecialedition")]
+        /// Which game the mod is for; Nexus short name
         game: String,
+        /// The id of the mod to show
         mod_id: u32,
     },
 }
@@ -229,9 +231,8 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                             }
                         });
 
-                        // TODO order these less than arbitrarily
-                        for (catid, mods) in cat_map.iter() {
-                            if let Some(category) = game_meta.category_from_id(*catid) {
+                        for (catid, mods) in cat_map.into_iter().sorted_by_key(|xs| xs.0) {
+                            if let Some(category) = game_meta.category_from_id(catid) {
                                 println!("----- {}:", category.name().purple());
                             } else {
                                 println!("----- category id #{}:", catid.blue());
@@ -275,25 +276,31 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                 );
 
                 for (game, modlist) in mapping.iter() {
-                    let game_meta =
-                        find::<GameMetadata, &str>(game, &store, &mut nexus).unwrap();
+                    let game_meta = find::<GameMetadata, &str>(game, &store, &mut nexus).unwrap();
                     println!("Endorsements for {}:", game_meta.name().yellow().bold());
                     let mut table = Table::new();
                     table.set_format(*prettytable::format::consts::FORMAT_CLEAN);
                     modlist.iter().for_each(|opinion| {
-                        if let Some(mod_info) = ModInfoFull::local((game, opinion.mod_id()), &store) {
+                        if let Some(mod_info) = ModInfoFull::local((game, opinion.mod_id()), &store)
+                        {
                             table.add_row(row![
                                 format!("{}", opinion.status()),
-                                format!("\x1b]8;;{}\x1b\\{}\x1b]8m;;\x1b\\", opinion.get_url(), mod_info.name().green()),
+                                format!(
+                                    "\x1b]8;;{}\x1b\\{}\x1b]8;;\x1b\\",
+                                    opinion.get_url(),
+                                    mod_info.display_name()
+                                ),
                             ]);
                         } else {
                             table.add_row(row![
                                 format!("{}", opinion.status()),
-                                format!("\x1b]8;;{}\x1b\\mod id #{}\x1b]8m;;\x1b\\", opinion.get_url(), opinion.mod_id()),
+                                format!(
+                                    "\x1b]8;;{}\x1b\\uncached mod id #{}\x1b]8;;\x1b\\",
+                                    opinion.get_url(),
+                                    opinion.mod_id()
+                                ),
                             ]);
                         }
-                        // \x1b[
-                        // printf '\e]8;;http://example.com\e\\This is a link\e]8;;\e\\n'
                     });
                     println!("{}", table);
                 }
