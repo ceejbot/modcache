@@ -1,4 +1,4 @@
-use log::error;
+use log::{error, info};
 use owo_colors::OwoColorize;
 use prettytable::{cell, row, Table};
 use serde::{Deserialize, Serialize};
@@ -52,6 +52,18 @@ impl Tracked {
             .filter(|item| item.domain_name == game)
             .collect();
         result
+    }
+
+    pub fn refresh(db: &kv::Store, nexus: &mut NexusClient) -> Option<Box<Self>> {
+        if let Some(fetched) = Tracked::fetch((), nexus) {
+            info!("refreshed tracked mod data");
+            if fetched.store(db).is_ok() {
+                info!("cached refreshed tracked data");
+            }
+            Some(fetched)
+        } else {
+            None
+        }
     }
 
     pub fn all(db: &kv::Store, nexus: &mut NexusClient) -> Option<Box<Self>> {

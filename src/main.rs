@@ -8,6 +8,8 @@ use prettytable::{cell, row, Table};
 use serde::Serialize;
 use structopt::clap::AppSettings::*;
 use structopt::StructOpt;
+use term_grid::{Cell, Direction, Filling, Grid, GridOptions};
+use terminal_size::*;
 
 pub mod data;
 pub mod nexus;
@@ -28,6 +30,18 @@ pub struct Flags {
         help = "Pass -v or -vv to increase verbosity"
     )]
     verbose: u64,
+    #[structopt(
+        short,
+        long,
+        help = "dump full output as json; not applicable everywhere"
+    )]
+    json: bool,
+    #[structopt(
+        short,
+        long,
+        help = "refresh data from the Nexus; not applicable everywhere"
+    )]
+    refresh: bool,
     #[structopt(subcommand)]
     cmd: Command,
 }
@@ -49,6 +63,20 @@ enum Command {
     Tracked {
         #[structopt(default_value = "all")]
         game: String,
+    },
+    /// Track a specific mod
+    Track {
+        /// Which game the mod is for; Nexus short name
+        game: String,
+        /// The id of the mod to track
+        mod_id: u32,
+    },
+    /// Stop tracking a mod
+    Untrack {
+        /// Which game the mod is for; Nexus short name
+        game: String,
+        /// The id of the mod to track
+        mod_id: u32,
     },
     /// Fetch the list of mods you've endorsed
     Endorsements,
@@ -79,6 +107,29 @@ enum Command {
         /// The id of the mod to show
         mod_id: u32,
     },
+}
+
+fn print_in_grid(items: Vec<impl ToString>) {
+    let width = if let Some((Width(w), Height(_h))) = terminal_size() {
+        w - 2
+    } else {
+        72
+    };
+
+    let mut grid = Grid::new(GridOptions {
+        filling: Filling::Spaces(2),
+        direction: Direction::LeftToRight,
+    });
+    for item in items {
+        grid.add(Cell::from(item.to_string()));
+    }
+
+    if let Some(g) = grid.fit_into_width(width.into()) {
+        // https://github.com/ogham/rust-term-grid/issues/11
+        println!("{}", g);
+    } else {
+        println!("{}", grid.fit_into_columns(10));
+    }
 }
 
 fn main() -> anyhow::Result<(), anyhow::Error> {
@@ -113,7 +164,12 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
             if let Some(modinfo) =
                 find::<ModInfoFull, (&str, u32)>((&game, mod_id), &store, &mut nexus)
             {
-                println!("{}", modinfo);
+                if flags.json {
+                    let pretty = serde_json::to_string_pretty(&modinfo)?;
+                    println!("{}", pretty);
+                } else {
+                    println!("{}", modinfo);
+                }
             }
         }
         Command::Populate { game, limit } => {
@@ -184,19 +240,33 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
         }
         Command::Validate => {
             if let Some(user) = AuthenticatedUser::fetch("ignored", &mut nexus) {
-                println!("You are logged in as:\n{}", user);
-                println!(
-                    "\nYou have {} requests remaining this hour and {} for today.",
-                    nexus.remaining_hour().bold(),
-                    nexus.remaining_day().bold()
-                );
+                if flags.json {
+                    let pretty = serde_json::to_string_pretty(&user)?;
+                    println!("{}", pretty);
+                } else {
+                    println!("You are logged in as:\n{}", user);
+                    println!(
+                        "\nYou have {} requests remaining this hour and {} for today.",
+                        nexus.remaining_hour().bold(),
+                        nexus.remaining_day().bold()
+                    );
+                }
             } else {
                 warn!("Something went wrong validating your API key.")
             }
         }
         Command::Tracked { game } => {
-            if let Some(tracked) = Tracked::all(&store, &mut nexus) {
-                if game == "all" {
+            let maybe = if flags.refresh {
+                Tracked::refresh(&store, &mut nexus)
+            } else {
+                Tracked::all(&store, &mut nexus)
+            };
+
+            if let Some(tracked) = maybe {
+                if flags.json {
+                    let pretty = serde_json::to_string_pretty(&tracked)?;
+                    println!("{}", pretty);
+                } else if game == "all" {
                     println!("{}", tracked);
                 } else {
                     let filtered = tracked.by_game(&game);
@@ -248,24 +318,42 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                             filtered.len().blue(),
                             game_meta.name().yellow().bold()
                         );
-                        print!("\n{} mods are marked as removed: ", removed.len().blue());
-                        removed.iter().for_each(|xs| print!("{} ", xs.mod_id()));
-                        print!(
-                            "\n{} mods were wasted by their authors: ",
-                            wasted.len().blue()
-                        );
-                        wasted.iter().for_each(|xs| print!("{} ", xs.mod_id()));
                         println!(
-                            "\n\n{} tracked mods are in cache.",
+                            "{} tracked mods are in cache.",
                             (filtered.len() - uncached).blue()
                         );
                         println!("Another {} mods are not yet cached.", uncached.blue());
+                        println!("\n{} mods are marked as removed: ", removed.len().blue());
+                        print_in_grid(removed.iter().map(|xs| xs.mod_id()).collect());
+                        println!(
+                            "{} mods were wasted by their authors: ",
+                            wasted.len().blue()
+                        );
+                        print_in_grid(wasted.iter().map(|xs| xs.mod_id()).collect());
                     }
                 }
             } else {
                 error!("Something went wrong fetching tracked mods. Rerun with -v to get more details.");
             }
         }
+        Command::Track { game, mod_id } => match nexus.track(&game, mod_id) {
+            Ok(message) => {
+                let pretty = serde_json::to_string_pretty(&message)?;
+                println!("{}", pretty);
+            }
+            Err(_) => {
+                println!("Whoops. Run with -v to get more info.");
+            }
+        },
+        Command::Untrack { game, mod_id } => match nexus.untrack(&game, mod_id) {
+            Ok(message) => {
+                let pretty = serde_json::to_string_pretty(&message)?;
+                println!("{}", pretty);
+            }
+            Err(_) => {
+                println!("Whoops. Run with -v to get more info.");
+            }
+        },
         Command::Endorsements => {
             if let Some(opinions) = EndorsementList::all(&store, &mut nexus) {
                 let mapping = opinions.get_game_map();

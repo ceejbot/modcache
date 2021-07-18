@@ -167,9 +167,14 @@ impl ModInfoFull {
 
     pub fn print_compact(&self) {
         if let Some(endorse) = &self.endorsement {
-            println!("    {} {}", self.display_name(), endorse.endorse_status.display_for_tracked());
+            println!(
+                "    {} <{}> {}",
+                self.display_name(),
+                self.uploaded_by.cyan(),
+                endorse.endorse_status.display_for_tracked()
+            );
         } else {
-            println!("    {}", self.display_name());
+            println!("    {} <{}>", self.display_name(), self.uploaded_by.cyan());
         }
     }
 }
