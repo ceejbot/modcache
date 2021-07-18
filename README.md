@@ -17,8 +17,8 @@ USAGE:
 
 FLAGS:
     -h, --help       Prints help information
-    -j, --json       dump full output as json; not applicable everywhere
-    -r, --refresh    refresh data from the Nexus; not applicable everywhere
+    -j, --json       Emit full output as json; not applicable everywhere
+    -r, --refresh    Refresh data from the Nexus; not applicable everywhere
     -V, --version    Prints version information
     -v, --verbose    Pass -v or -vv to increase verbosity
 
