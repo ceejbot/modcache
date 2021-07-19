@@ -1,4 +1,4 @@
-use log::error;
+use log::{error, info};
 use owo_colors::OwoColorize;
 use serde::{Deserialize, Serialize};
 
@@ -104,6 +104,18 @@ impl EndorsementList {
             .filter(|item| item.domain_name == game)
             .collect();
         result
+    }
+
+    pub fn refresh(db: &kv::Store, nexus: &mut NexusClient) -> Option<Box<Self>> {
+        if let Some(fetched) = Self::fetch((), nexus) {
+            info!("refreshed endorsed mod data");
+            if fetched.store(db).is_ok() {
+                info!("cached refreshed endorsements data");
+            }
+            Some(fetched)
+        } else {
+            None
+        }
     }
 
     pub fn all(db: &kv::Store, nexus: &mut NexusClient) -> Option<Box<Self>> {

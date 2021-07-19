@@ -132,6 +132,25 @@ fn print_in_grid(items: Vec<impl ToString>) {
     }
 }
 
+fn pluralize_mod(count: usize) -> String {
+    if count == 1 {
+        format!("{} mod", "one".blue())
+    } else {
+        format!("{} mods", count.blue())
+    }
+}
+
+fn emit_modlist_with_caption(modlist: Vec<ModInfoFull>, caption: &str) {
+    if !modlist.is_empty() {
+        println!(
+            "{} {}:",
+            pluralize_mod(modlist.len()).bold(),
+            caption.bold()
+        );
+        print_in_grid(modlist.iter().map(|xs| xs.mod_id()).collect());
+    }
+}
+
 fn main() -> anyhow::Result<(), anyhow::Error> {
     dotenv().ok();
     let nexuskey = std::env::var("NEXUS_API_KEY")
@@ -271,8 +290,10 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                             find::<GameMetadata, &str>(&game, &store, &mut nexus).unwrap();
                         // bucket mods by category, treating removed and wastebinned mods separately.
                         let mut uncached = 0;
+                        // I note that this list of special-cases is looking very pattern-like.
                         let mut wasted: Vec<ModInfoFull> = Vec::new();
                         let mut removed: Vec<ModInfoFull> = Vec::new();
+                        let mut moderated: Vec<ModInfoFull> = Vec::new();
                         let mut cat_map: HashMap<u16, Vec<ModInfoFull>> = HashMap::new();
                         filtered.iter().for_each(|m| {
                             if let Some(mod_info) = ModInfoFull::local((&game, m.mod_id), &store) {
@@ -285,6 +306,9 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                                     }
                                     ModStatus::Removed => {
                                         removed.push(*mod_info);
+                                    }
+                                    ModStatus::UnderModeration => {
+                                        moderated.push(*mod_info);
                                     }
                                     _ => {
                                         bucket.push(*mod_info);
@@ -308,22 +332,17 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                         }
 
                         println!(
-                            "\nYou are tracking {} mods for {}.",
-                            filtered.len().blue(),
+                            "\nYou are tracking {} for {}.",
+                            pluralize_mod(filtered.len()),
                             game_meta.name().yellow().bold()
                         );
-                        println!(
-                            "{} tracked mods are in cache.",
-                            (filtered.len() - uncached).blue()
-                        );
-                        println!("Another {} mods are not yet cached.", uncached.blue());
-                        println!("\n{} mods are marked as removed: ", removed.len().blue());
-                        print_in_grid(removed.iter().map(|xs| xs.mod_id()).collect());
-                        println!(
-                            "{} mods were wasted by their authors: ",
-                            wasted.len().blue()
-                        );
-                        print_in_grid(wasted.iter().map(|xs| xs.mod_id()).collect());
+                        println!("{} are in cache.", pluralize_mod(filtered.len() - uncached));
+                        println!("Another {} not yet cached.", pluralize_mod(uncached));
+                        println!();
+
+                        emit_modlist_with_caption(removed, "removed");
+                        emit_modlist_with_caption(wasted, "wastebinned by their authors");
+                        emit_modlist_with_caption(moderated, "under moderation");
                     }
                 }
             } else {
@@ -349,7 +368,13 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
             }
         },
         Command::Endorsements => {
-            if let Some(opinions) = EndorsementList::all(&store, &mut nexus) {
+            let maybe = if flags.refresh {
+                EndorsementList::refresh(&store, &mut nexus)
+            } else {
+                EndorsementList::all(&store, &mut nexus)
+            };
+
+            if let Some(opinions) = maybe {
                 if flags.json {
                     let pretty = serde_json::to_string_pretty(&opinions)?;
                     println!("{}", pretty);
