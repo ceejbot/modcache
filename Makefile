@@ -3,7 +3,7 @@ all: release
 bin:
 	@mkdir -p bin
 
-release: bin
+release: bin clean
 	@cargo build --release
 	@cp target/release/modcache bin/
 
