@@ -8,9 +8,9 @@ release: bin clean
 	@cp target/release/modcache bin/
 
 clean:
-	cargo clean --release
+	@rm bin/modcache
 
 spotless:
-	cargog clean
+	cargo clean
 
 .phony: release clean spotless

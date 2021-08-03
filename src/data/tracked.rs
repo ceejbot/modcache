@@ -1,4 +1,3 @@
-use log::{error, info};
 use owo_colors::OwoColorize;
 use prettytable::{cell, row, Table};
 use serde::{Deserialize, Serialize};
@@ -6,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Display;
 
-use super::Cacheable;
+use super::{Cacheable, HasEtag};
 use crate::nexus::NexusClient;
 
 // Store and retrieve the tracked mods list.
@@ -18,9 +17,9 @@ pub struct ModReference {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(transparent)]
 pub struct Tracked {
     pub mods: Vec<ModReference>,
+    pub etag: String,
 }
 
 impl Display for ModReference {
@@ -54,20 +53,12 @@ impl Tracked {
         result
     }
 
-    pub fn refresh(db: &kv::Store, nexus: &mut NexusClient) -> Option<Box<Self>> {
-        if let Some(fetched) = Tracked::fetch((), nexus) {
-            info!("refreshed tracked mod data");
-            if fetched.store(db).is_ok() {
-                info!("cached refreshed tracked data");
-            }
-            Some(fetched)
+    pub fn get(refresh: bool, db: &kv::Store, nexus: &mut NexusClient) -> Option<Box<Self>> {
+        if refresh {
+            super::refresh::<Self, ()>((), db, nexus)
         } else {
-            None
+            super::find::<Self, ()>((), db, nexus)
         }
-    }
-
-    pub fn all(db: &kv::Store, nexus: &mut NexusClient) -> Option<Box<Self>> {
-        super::find::<Tracked, ()>((), db, nexus)
     }
 }
 
@@ -91,19 +82,23 @@ impl Display for Tracked {
     }
 }
 
+impl HasEtag for Tracked {
+    fn etag(&self) -> &str {
+        &self.etag
+    }
+
+    fn set_etag(&mut self, etag: &str) {
+        self.etag = etag.to_string()
+    }
+}
+
 impl Cacheable<()> for Tracked {
-    fn bucket(store: &kv::Store) -> Option<kv::Bucket<'static, &'static str, Tracked>> {
-        match store.bucket::<&str, Tracked>(Some("mod_ref_lists")) {
-            Err(e) => {
-                error!("Can't open bucket for mod reference lists {:?}", e);
-                None
-            }
-            Ok(v) => Some(v),
-        }
+    fn bucket_name() -> &'static str {
+        "mod_ref_lists"
     }
 
     fn local(_key: (), db: &kv::Store) -> Option<Box<Self>> {
-        let bucket = Tracked::bucket(db).unwrap();
+        let bucket = super::bucket::<Self, ()>(db).unwrap();
         let found = bucket.get("tracked").ok()?;
         if let Some(modref_list) = found {
             return Some(Box::new(modref_list));
@@ -111,15 +106,12 @@ impl Cacheable<()> for Tracked {
         None
     }
 
-    fn fetch(_key: (), nexus: &mut NexusClient) -> Option<Box<Self>> {
-        match nexus.tracked() {
-            Err(_) => None,
-            Ok(tracked) => Some(Box::new(tracked)),
-        }
+    fn fetch(_key: (), nexus: &mut NexusClient, etag: Option<String>) -> Option<Box<Self>> {
+        nexus.tracked(etag).map(Box::new)
     }
 
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
-        let bucket = Tracked::bucket(db).unwrap();
+        let bucket = super::bucket::<Self, ()>(db).unwrap();
         if bucket.set("tracked", self.clone()).is_ok() {
             Ok(1)
         } else {

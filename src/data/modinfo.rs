@@ -1,14 +1,13 @@
 // All structs and trait impls supporting the full mod info response from the Nexus.
 
 use chrono::Utc;
-use log::error;
 use owo_colors::OwoColorize;
 use serde::{Deserialize, Serialize};
 
 use std::fmt::Display;
 
 use crate::nexus::NexusClient;
-use crate::{Cacheable, EndorsementStatus};
+use crate::{Cacheable, EndorsementStatus, HasEtag};
 
 #[derive(serde::Deserialize, Serialize, Debug, Clone)]
 pub struct ModAuthor {
@@ -69,6 +68,7 @@ pub enum ModStatus {
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(default)]
 pub struct ModInfoFull {
     // the next two fields fully identify a mod
     domain_name: String,
@@ -103,6 +103,7 @@ pub struct ModInfoFull {
     endorsement_count: u32,
     game_id: u32,
     uid: u64, // unknown meaning
+    etag: String,
 }
 
 impl ModInfoFull {
@@ -169,6 +170,16 @@ impl ModInfoFull {
     }
 }
 
+impl HasEtag for ModInfoFull {
+    fn etag(&self) -> &str {
+        &self.etag
+    }
+
+    fn set_etag(&mut self, etag: &str) {
+        self.etag = etag.to_string()
+    }
+}
+
 impl Default for ModInfoFull {
     fn default() -> Self {
         ModInfoFull {
@@ -196,6 +207,7 @@ impl Default for ModInfoFull {
             endorsement_count: 0,
             game_id: 0,
             uid: 0,
+            etag: "".to_string(),
         }
     }
 }
@@ -214,6 +226,34 @@ impl Display for ModInfoFull {
     }
 }
 
+impl Cacheable<(&str, u32)> for ModInfoFull {
+    fn bucket_name() -> &'static str {
+        "mods"
+    }
+
+    fn local(key: (&str, u32), db: &kv::Store) -> Option<Box<Self>> {
+        let compound = format!("{}/{}", key.0, key.1);
+        let bucket = super::bucket::<Self, (&str, u32)>(db).unwrap();
+        let found = bucket.get(&*compound).ok()?;
+        found.map(Box::new)
+    }
+
+    fn fetch(key: (&str, u32), nexus: &mut NexusClient, etag: Option<String>) -> Option<Box<Self>> {
+        nexus.mod_by_id(key.0, key.1, etag).map(Box::new)
+    }
+
+    fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
+        let bucket = super::bucket::<Self, (&str, u32)>(db).unwrap();
+        let compound = format!("{}/{}", self.domain_name, self.mod_id);
+        if bucket.set(&*compound, self.clone()).is_ok() {
+            Ok(1)
+        } else {
+            Ok(0)
+        }
+    }
+}
+
+// TODO write a macro for this
 impl kv::Value for ModInfoFull {
     fn to_raw_value(&self) -> Result<kv::Raw, kv::Error> {
         let x = serde_json::to_vec(&self)?;
@@ -223,42 +263,5 @@ impl kv::Value for ModInfoFull {
     fn from_raw_value(r: kv::Raw) -> Result<Self, kv::Error> {
         let x: Self = serde_json::from_slice(&r)?;
         Ok(x)
-    }
-}
-
-impl Cacheable<(&str, u32)> for ModInfoFull {
-    fn bucket(db: &kv::Store) -> Option<kv::Bucket<'static, &'static str, Self>> {
-        match db.bucket::<&str, Self>(Some("mods")) {
-            Err(e) => {
-                error!("Can't open bucket for mod info! {:?}", e);
-                None
-            }
-            Ok(v) => Some(v),
-        }
-    }
-
-    fn local(key: (&str, u32), db: &kv::Store) -> Option<Box<Self>> {
-        let compound = format!("{}/{}", key.0, key.1);
-        let bucket = ModInfoFull::bucket(db).unwrap();
-        let found = bucket.get(&*compound).ok()?;
-        found.map(Box::new)
-    }
-
-    fn fetch(key: (&str, u32), nexus: &mut NexusClient) -> Option<Box<Self>> {
-        if let Ok(modinfo) = nexus.mod_by_id(key.0, key.1) {
-            Some(Box::new(modinfo))
-        } else {
-            None
-        }
-    }
-
-    fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
-        let bucket = ModInfoFull::bucket(db).unwrap();
-        let compound = format!("{}/{}", self.domain_name, self.mod_id);
-        if bucket.set(&*compound, self.clone()).is_ok() {
-            Ok(1)
-        } else {
-            Ok(0)
-        }
     }
 }

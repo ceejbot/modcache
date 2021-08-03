@@ -1,4 +1,3 @@
-use log::{error, info};
 use owo_colors::OwoColorize;
 use serde::{Deserialize, Serialize};
 
@@ -6,7 +5,7 @@ use std::collections::HashMap;
 use std::fmt::Display;
 
 use crate::nexus::NexusClient;
-use crate::Cacheable;
+use crate::{Cacheable, HasEtag};
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub enum EndorsementStatus {
@@ -74,9 +73,9 @@ impl Display for UserEndorsement {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(transparent)]
 pub struct EndorsementList {
     pub mods: Vec<UserEndorsement>,
+    pub etag: String,
 }
 
 impl EndorsementList {
@@ -106,20 +105,12 @@ impl EndorsementList {
         result
     }
 
-    pub fn refresh(db: &kv::Store, nexus: &mut NexusClient) -> Option<Box<Self>> {
-        if let Some(fetched) = Self::fetch((), nexus) {
-            info!("refreshed endorsed mod data");
-            if fetched.store(db).is_ok() {
-                info!("cached refreshed endorsements data");
-            }
-            Some(fetched)
+    pub fn get(refresh: bool, db: &kv::Store, nexus: &mut NexusClient) -> Option<Box<Self>> {
+        if refresh {
+            super::refresh::<Self, ()>((), db, nexus)
         } else {
-            None
+            super::find::<Self, ()>((), db, nexus)
         }
-    }
-
-    pub fn all(db: &kv::Store, nexus: &mut NexusClient) -> Option<Box<Self>> {
-        super::find::<Self, ()>((), db, nexus)
     }
 }
 
@@ -135,19 +126,23 @@ impl Display for EndorsementList {
     }
 }
 
+impl HasEtag for EndorsementList {
+    fn etag(&self) -> &str {
+        &self.etag
+    }
+
+    fn set_etag(&mut self, etag: &str) {
+        self.etag = etag.to_string()
+    }
+}
+
 impl Cacheable<()> for EndorsementList {
-    fn bucket(db: &kv::Store) -> Option<kv::Bucket<'static, &'static str, Self>> {
-        match db.bucket::<&str, EndorsementList>(Some("endorsements")) {
-            Err(e) => {
-                error!("Can't open bucket for endorsements {:?}", e);
-                None
-            }
-            Ok(v) => Some(v),
-        }
+    fn bucket_name() -> &'static str {
+        "endorsements"
     }
 
     fn local(_key: (), db: &kv::Store) -> Option<Box<Self>> {
-        let bucket = EndorsementList::bucket(db).unwrap();
+        let bucket = super::bucket::<Self, ()>(db).unwrap();
         let found = bucket.get("endorsements").ok()?;
         if let Some(modref_list) = found {
             return Some(Box::new(modref_list));
@@ -155,15 +150,16 @@ impl Cacheable<()> for EndorsementList {
         None
     }
 
-    fn fetch(_key: (), nexus: &mut crate::nexus::NexusClient) -> Option<Box<Self>> {
-        match nexus.endorsements() {
-            Err(_) => None,
-            Ok(v) => Some(Box::new(v)),
-        }
+    fn fetch(
+        _key: (),
+        nexus: &mut crate::nexus::NexusClient,
+        etag: Option<String>,
+    ) -> Option<Box<Self>> {
+        nexus.endorsements(etag).map(Box::new)
     }
 
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
-        let bucket = EndorsementList::bucket(db).unwrap();
+        let bucket = super::bucket::<Self, ()>(db).unwrap();
         if bucket.set("endorsements", self.clone()).is_ok() {
             Ok(1)
         } else {

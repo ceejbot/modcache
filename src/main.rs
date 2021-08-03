@@ -199,7 +199,7 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
             }
             // let gamemeta = gamemeta.unwrap();
 
-            let tracked = Tracked::all(&store, &mut nexus);
+            let tracked = Tracked::get(flags.refresh, &store, &mut nexus);
             if tracked.is_none() {
                 anyhow::bail!("Unable to fetch any tracked mods.");
             }
@@ -227,7 +227,7 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                 // Find the next uncached mod.
                 let maybe_mod = if ModInfoFull::local(key, &store).is_some() {
                     None
-                } else if let Some(m) = ModInfoFull::fetch(key, &mut nexus) {
+                } else if let Some(m) = ModInfoFull::fetch(key, &mut nexus, None) {
                     m.store(&store)?;
                     fetches += 1;
                     Some(m)
@@ -252,7 +252,7 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
             }
         }
         Command::Validate => {
-            if let Some(user) = AuthenticatedUser::fetch("ignored", &mut nexus) {
+            if let Some(user) = AuthenticatedUser::fetch("ignored", &mut nexus, None) {
                 if flags.json {
                     let pretty = serde_json::to_string_pretty(&user)?;
                     println!("{}", pretty);
@@ -269,11 +269,7 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
             }
         }
         Command::Tracked { game } => {
-            let maybe = if flags.refresh {
-                Tracked::refresh(&store, &mut nexus)
-            } else {
-                Tracked::all(&store, &mut nexus)
-            };
+            let maybe = Tracked::get(flags.refresh, &store, &mut nexus);
 
             if let Some(tracked) = maybe {
                 if flags.json {
@@ -368,11 +364,7 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
             }
         },
         Command::Endorsements => {
-            let maybe = if flags.refresh {
-                EndorsementList::refresh(&store, &mut nexus)
-            } else {
-                EndorsementList::all(&store, &mut nexus)
-            };
+            let maybe = EndorsementList::get(flags.refresh, &store, &mut nexus);
 
             if let Some(opinions) = maybe {
                 if flags.json {

@@ -1,4 +1,3 @@
-use log::error;
 use owo_colors::OwoColorize;
 use serde::{Deserialize, Serialize};
 
@@ -34,37 +33,18 @@ impl Default for AuthenticatedUser {
     }
 }
 
-// it feels like if I figured out the kv crate traits I wouldn't have to do this.
-impl kv::Value for AuthenticatedUser {
-    fn to_raw_value(&self) -> Result<kv::Raw, kv::Error> {
-        let x = serde_json::to_vec(&self)?;
-        Ok(x.into())
-    }
-
-    fn from_raw_value(r: kv::Raw) -> Result<Self, kv::Error> {
-        let x: Self = serde_json::from_slice(&r)?;
-        Ok(x)
-    }
-}
-
 impl Cacheable<&str> for AuthenticatedUser {
-    fn bucket(db: &kv::Store) -> Option<kv::Bucket<'static, &'static str, Self>> {
-        match db.bucket::<&str, Self>(Some("authed_users")) {
-            Err(e) => {
-                error!("Can't open bucket for users! {:?}", e);
-                None
-            }
-            Ok(v) => Some(v),
-        }
+    fn bucket_name() -> &'static str {
+        "authed_users"
     }
 
     fn local(key: &str, db: &kv::Store) -> Option<Box<Self>> {
-        let bucket = AuthenticatedUser::bucket(db).unwrap();
+        let bucket = super::bucket::<Self, &str>(db).unwrap();
         let found = bucket.get(key).ok()?;
         found.map(Box::new)
     }
 
-    fn fetch(_key: &str, nexus: &mut NexusClient) -> Option<Box<Self>> {
+    fn fetch(_key: &str, nexus: &mut NexusClient, _etag: Option<String>) -> Option<Box<Self>> {
         if let Ok(user) = nexus.validate() {
             Some(Box::new(user))
         } else {
@@ -73,7 +53,7 @@ impl Cacheable<&str> for AuthenticatedUser {
     }
 
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
-        let bucket = AuthenticatedUser::bucket(db).unwrap();
+        let bucket = super::bucket::<Self, &str>(db).unwrap();
         if bucket.set("authed_user", self.clone()).is_ok() {
             Ok(1)
         } else {
@@ -92,5 +72,18 @@ impl Display for AuthenticatedUser {
             self.user_id,
             self.profile_url
         )
+    }
+}
+
+// it feels like if I figured out the kv crate traits I wouldn't have to do this.
+impl kv::Value for AuthenticatedUser {
+    fn to_raw_value(&self) -> Result<kv::Raw, kv::Error> {
+        let x = serde_json::to_vec(&self)?;
+        Ok(x.into())
+    }
+
+    fn from_raw_value(r: kv::Raw) -> Result<Self, kv::Error> {
+        let x: Self = serde_json::from_slice(&r)?;
+        Ok(x)
     }
 }

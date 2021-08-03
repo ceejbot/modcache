@@ -82,10 +82,10 @@ impl NexusClient {
         }
     }
 
+    /// Handle nexus rate-limiting headers, responding with the value of an etag
+    /// header if one is found.
     // This would be a perfect use case for middleware.
-    fn handle_headers(&mut self, response: &ureq::Response) -> Result<(), anyhow::Error> {
-        // handle nexus rate limiting; 429 response code indicates you've hit it
-        // max request rate is 30/sec
+    fn handle_headers(&mut self, response: &ureq::Response) -> Result<String, anyhow::Error> {
         // We bail on parse failures because well, if this happens we've misunderstood the
         // contract the Nexus is upholding with us.
         if let Some(v) = response.header("x-rl-hourly-limit") {
@@ -107,13 +107,71 @@ impl NexusClient {
             self.limits.daily_reset = v.parse::<DateTime<Utc>>()?;
         }
 
-        Ok(())
+        let etag = match response.header("etag") {
+            None => "".to_string(),
+            Some(v) => v.to_string(),
+        };
+
+        Ok(etag)
     }
 
-    fn make_get_request<T: for<'de> Deserialize<'de>>(
+    fn conditional_get<T: for<'de> Deserialize<'de>>(
         &mut self,
         uri: &str,
-    ) -> Result<T, anyhow::Error> {
+        etag: Option<String>,
+    ) -> Result<(Option<T>, String), anyhow::Error> {
+        if !self.requests_allowed() {
+            anyhow::bail!("Rate-limited");
+        }
+
+        let mut builder = self
+            .agent
+            .get(uri)
+            .set("apikey", &self.apikey)
+            .set("user-agent", "modcache: github.com/ceejbot/modcache");
+
+        if let Some(t) = etag {
+            builder = builder.set("if-none-match", &t);
+        }
+
+        let response = match builder.call() {
+            Ok(v) => v,
+            Err(ureq::Error::Status(code, response)) => {
+                // max request rate is 30/sec, which tbh we might hit.
+                if code == 429 {
+                    warn!("The Nexus has rate-limited you!");
+                } else {
+                    error!("The Nexus responded with {}", code.red());
+                    error!("{:?}", response.into_string());
+                }
+                anyhow::bail!("well this is another fine mess TODO better reporting");
+            }
+            Err(e) => {
+                error!("Transport layer error: {:?}", e);
+                anyhow::bail!(e);
+            }
+        };
+
+        let etag = self.handle_headers(&response)?;
+
+        let status = response.status();
+        if status == 304 {
+            return Ok((None, etag));
+        }
+
+        let payload = response.into_json::<T>();
+
+        match payload {
+            Err(e) => {
+                error!("problem deserializing: {:?}", e);
+                Err(anyhow::Error::new(e))
+            }
+            Ok(v) => Ok((Some(v), etag)),
+        }
+    }
+
+    // Shut up. I'm repeating myself to find patterns, dammit.
+    fn get<T: for<'de> Deserialize<'de>>(&mut self, uri: &str) -> Result<T, anyhow::Error> {
         if !self.requests_allowed() {
             anyhow::bail!("Rate-limited");
         }
@@ -159,7 +217,7 @@ impl NexusClient {
     // Shut up. I'm repeating myself to find patterns, dammit.
     // Here I assume I'm never going to care about what the Nexus responds with,
     // other than the status code.
-    pub fn make_post_request(
+    pub fn post(
         &mut self,
         uri: &str,
         body: &[(&str, &str)],
@@ -201,7 +259,7 @@ impl NexusClient {
     }
 
     // repeat previous comment
-    pub fn make_del_request(
+    pub fn delete(
         &mut self,
         uri: &str,
         body: &[(&str, &str)],
@@ -244,24 +302,40 @@ impl NexusClient {
 
     // Boy, this sure looks like predictable code.
 
-    pub fn gameinfo(&mut self, game: &str) -> anyhow::Result<GameMetadata> {
+    pub fn gameinfo(&mut self, game: &str, etag: Option<String>) -> Option<GameMetadata> {
         let uri = format!("{}/v1/games/{}.json", NEXUS_BASE, game);
-        self.make_get_request::<GameMetadata>(&uri)
+        if let Ok((Some(mut metadata), etag)) = self.conditional_get::<GameMetadata>(&uri, etag) {
+            metadata.set_etag(etag);
+            return Some(metadata);
+        }
+        None
     }
 
-    pub fn mod_by_id(&mut self, game: &str, modid: u32) -> anyhow::Result<ModInfoFull> {
+    pub fn mod_by_id(
+        &mut self,
+        game: &str,
+        modid: u32,
+        etag: Option<String>,
+    ) -> Option<ModInfoFull> {
         let uri = format!("{}/v1/games/{}/mods/{}.json", NEXUS_BASE, game, modid);
-        self.make_get_request::<ModInfoFull>(&uri)
+        if let Ok((Some(mut modinfo), etag)) = self.conditional_get::<ModInfoFull>(&uri, etag) {
+            modinfo.set_etag(&etag);
+            return Some(modinfo);
+        }
+        None
     }
 
     pub fn validate(&mut self) -> anyhow::Result<AuthenticatedUser> {
         let uri = format!("{}/v1/users/validate.json", NEXUS_BASE);
-        self.make_get_request::<AuthenticatedUser>(&uri)
+        self.get::<AuthenticatedUser>(&uri)
     }
 
-    pub fn tracked(&mut self) -> anyhow::Result<Tracked> {
+    pub fn tracked(&mut self, etag: Option<String>) -> Option<Tracked> {
         let uri = format!("{}/v1/user/tracked_mods.json", NEXUS_BASE);
-        self.make_get_request::<Tracked>(&uri)
+        if let Ok((Some(mods), etag)) = self.conditional_get::<Vec<ModReference>>(&uri, etag) {
+            return Some(Tracked { mods, etag });
+        }
+        None
     }
 
     pub fn track(&mut self, game: &str, mod_id: u32) -> anyhow::Result<serde_json::Value> {
@@ -269,7 +343,7 @@ impl NexusClient {
             "{}/v1/user/tracked_mods.json?domain_name={}",
             NEXUS_BASE, game
         );
-        self.make_post_request(&uri, &[("mod_id", &format!("{}", mod_id))])
+        self.post(&uri, &[("mod_id", &format!("{}", mod_id))])
     }
 
     pub fn untrack(&mut self, game: &str, mod_id: u32) -> anyhow::Result<serde_json::Value> {
@@ -277,27 +351,30 @@ impl NexusClient {
             "{}/v1/user/tracked_mods.json?domain_name={}",
             NEXUS_BASE, game
         );
-        self.make_del_request(&uri, &[("mod_id", &format!("{}", mod_id))])
+        self.delete(&uri, &[("mod_id", &format!("{}", mod_id))])
     }
 
-    pub fn endorsements(&mut self) -> anyhow::Result<EndorsementList> {
+    pub fn endorsements(&mut self, etag: Option<String>) -> Option<EndorsementList> {
         let uri = format!("{}/v1/user/endorsements.json", NEXUS_BASE);
-        self.make_get_request::<EndorsementList>(&uri)
+        if let Ok((Some(mods), etag)) = self.conditional_get::<Vec<UserEndorsement>>(&uri, etag) {
+            return Some(EndorsementList { mods, etag });
+        }
+        None
     }
 
     pub fn trending(&mut self, game: &str) -> anyhow::Result<ModInfoList> {
         let uri = format!("{}/v1/games/{}/mods/trending.json", NEXUS_BASE, game);
-        self.make_get_request::<ModInfoList>(&uri)
+        self.get::<ModInfoList>(&uri)
     }
 
     pub fn latest_added(&mut self, game: &str) -> anyhow::Result<ModInfoList> {
         let uri = format!("{}/v1/games/{}/mods/latest_added.json", NEXUS_BASE, game);
-        self.make_get_request::<ModInfoList>(&uri)
+        self.get::<ModInfoList>(&uri)
     }
 
     pub fn latest_updated(&mut self, game: &str) -> anyhow::Result<ModInfoList> {
         let uri = format!("{}/v1/games/{}/mods/latest_updated.json", NEXUS_BASE, game);
-        self.make_get_request::<ModInfoList>(&uri)
+        self.get::<ModInfoList>(&uri)
     }
 
     // TODO

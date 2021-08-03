@@ -1,4 +1,3 @@
-use log::error;
 use owo_colors::OwoColorize;
 use serde::{Deserialize, Serialize};
 
@@ -31,6 +30,7 @@ impl Display for ModCategory {
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(default)]
 pub struct GameMetadata {
     approved_date: u64,
     authors: u32,
@@ -46,6 +46,7 @@ pub struct GameMetadata {
     mods: u32,
     name: String,
     nexusmods_url: String,
+    etag: String,
     #[serde(skip)]
     category_map: Option<HashMap<u16, ModCategory>>,
 }
@@ -68,6 +69,7 @@ impl Default for GameMetadata {
             name: "default".to_string(),
             nexusmods_url: "".to_string(),
             category_map: None,
+            etag: "".to_string(),
         }
     }
 }
@@ -92,35 +94,29 @@ impl GameMetadata {
             None => None,
         }
     }
+
+    pub fn set_etag(&mut self, etag: String) {
+        self.etag = etag;
+    }
 }
 
 impl Cacheable<&str> for GameMetadata {
-    fn bucket(db: &kv::Store) -> Option<kv::Bucket<'static, &'static str, Self>> {
-        match db.bucket::<&str, Self>(Some("games")) {
-            Err(e) => {
-                error!("Can't open bucket for game metadata! {:?}", e);
-                None
-            }
-            Ok(v) => Some(v),
-        }
+    fn bucket_name() -> &'static str {
+        "games"
     }
 
     fn local(key: &str, db: &kv::Store) -> Option<Box<Self>> {
-        let bucket = GameMetadata::bucket(db).unwrap();
+        let bucket = super::bucket::<Self, &str>(db).unwrap();
         let found = bucket.get(key).ok()?;
         found.map(Box::new)
     }
 
-    fn fetch(key: &str, nexus: &mut NexusClient) -> Option<Box<Self>> {
-        if let Ok(game) = nexus.gameinfo(key) {
-            Some(Box::new(game))
-        } else {
-            None
-        }
+    fn fetch(key: &str, nexus: &mut NexusClient, etag: Option<String>) -> Option<Box<Self>> {
+        nexus.gameinfo(key, etag).map(Box::new)
     }
 
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
-        let bucket = GameMetadata::bucket(db).unwrap();
+        let bucket = super::bucket::<Self, &str>(db).unwrap();
         if bucket.set(&*self.domain_name, self.clone()).is_ok() {
             Ok(1)
         } else {
