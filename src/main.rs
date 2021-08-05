@@ -79,7 +79,10 @@ enum Command {
         mod_id: u32,
     },
     /// Fetch the list of mods you've endorsed
-    Endorsements,
+    Endorsements {
+        /// Optionally filter endorsements by this game name.
+        game: Option<String>,
+    },
     /// Get Nexus metadata about a game by slug
     Game {
         #[structopt(default_value = "skyrimspecialedition")]
@@ -149,6 +152,54 @@ fn emit_modlist_with_caption(modlist: Vec<ModInfoFull>, caption: &str) {
         );
         print_in_grid(modlist.iter().map(|xs| xs.mod_id()).collect());
     }
+}
+
+fn show_endorsements(
+    game: &str,
+    modlist: &[UserEndorsement],
+    refresh: bool,
+    store: &kv::Store,
+    client: &mut nexus::NexusClient,
+) {
+    let game_meta = find::<GameMetadata, &str>(game, store, client).unwrap();
+    println!("Endorsements for {}:", game_meta.name().yellow().bold());
+    let mut table = Table::new();
+    table.set_format(*prettytable::format::consts::FORMAT_CLEAN);
+    modlist.iter().for_each(|opinion| {
+        if let Some(mod_info) = ModInfoFull::local((game, opinion.mod_id()), store) {
+            table.add_row(row![
+                format!("{}", opinion.status()),
+                format!(
+                    "\x1b]8;;{}\x1b\\{}\x1b]8;;\x1b\\",
+                    opinion.get_url(),
+                    mod_info.display_name()
+                ),
+            ]);
+        } else if refresh {
+            let key = (game, opinion.mod_id());
+            if let Some(mod_info) = ModInfoFull::fetch(key, client, None) {
+                mod_info.store(store).ok();
+                table.add_row(row![
+                    format!("{}", opinion.status()),
+                    format!(
+                        "\x1b]8;;{}\x1b\\{}\x1b]8;;\x1b\\",
+                        opinion.get_url(),
+                        mod_info.display_name()
+                    ),
+                ]);
+            }
+        } else {
+            table.add_row(row![
+                format!("{}", opinion.status()),
+                format!(
+                    "\x1b]8;;{}\x1b\\uncached mod id #{}\x1b]8;;\x1b\\",
+                    opinion.get_url(),
+                    opinion.mod_id()
+                ),
+            ]);
+        }
+    });
+    println!("{}", table);
 }
 
 fn main() -> anyhow::Result<(), anyhow::Error> {
@@ -363,7 +414,7 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                 println!("Whoops. Run with -v to get more info.");
             }
         },
-        Command::Endorsements => {
+        Command::Endorsements { game } => {
             let maybe = EndorsementList::get(flags.refresh, &store, &mut nexus);
 
             if let Some(opinions) = maybe {
@@ -374,40 +425,22 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                 }
 
                 let mapping = opinions.get_game_map();
-                println!(
-                    "\n{} mods opinionated upon for {} games\n",
-                    opinions.mods.len().red(),
-                    mapping.len().blue()
-                );
-
-                for (game, modlist) in mapping.iter() {
-                    let game_meta = find::<GameMetadata, &str>(game, &store, &mut nexus).unwrap();
-                    println!("Endorsements for {}:", game_meta.name().yellow().bold());
-                    let mut table = Table::new();
-                    table.set_format(*prettytable::format::consts::FORMAT_CLEAN);
-                    modlist.iter().for_each(|opinion| {
-                        if let Some(mod_info) = ModInfoFull::local((game, opinion.mod_id()), &store)
-                        {
-                            table.add_row(row![
-                                format!("{}", opinion.status()),
-                                format!(
-                                    "\x1b]8;;{}\x1b\\{}\x1b]8;;\x1b\\",
-                                    opinion.get_url(),
-                                    mod_info.display_name()
-                                ),
-                            ]);
-                        } else {
-                            table.add_row(row![
-                                format!("{}", opinion.status()),
-                                format!(
-                                    "\x1b]8;;{}\x1b\\uncached mod id #{}\x1b]8;;\x1b\\",
-                                    opinion.get_url(),
-                                    opinion.mod_id()
-                                ),
-                            ]);
-                        }
-                    });
-                    println!("{}", table);
+                if let Some(g) = game {
+                    if let Some(modlist) = mapping.get(&g) {
+                        println!("{} opinions expressed on mods for {}.", modlist.len(), g);
+                        show_endorsements(&g, modlist, flags.refresh, &store, &mut nexus);
+                    } else {
+                        println!("No opinions expressed on mods for {}.", g);
+                    }
+                } else {
+                    println!(
+                        "\n{} mods opinionated upon for {} games\n",
+                        opinions.mods.len().red(),
+                        mapping.len().blue()
+                    );
+                    for (game, modlist) in mapping.iter() {
+                        show_endorsements(game, modlist, flags.refresh, &store, &mut nexus);
+                    }
                 }
             } else {
                 error!("Something went wrong fetching endorsements. Rerun with -v to get more details.");
