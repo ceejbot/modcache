@@ -248,7 +248,6 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                 warn!("{} can't be found on the Nexus! Bailing.", game);
                 return Ok(());
             }
-            // let gamemeta = gamemeta.unwrap();
 
             let tracked = Tracked::get(flags.refresh, &store, &mut nexus);
             if tracked.is_none() {
@@ -263,7 +262,7 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
             );
 
             println!(
-                "Now iterating tracked mods, caching the first uncached {} found",
+                "Now iterating tracked mods, caching the first {} uncached found",
                 limit
             );
 
@@ -373,9 +372,11 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                                 println!("----- category id #{}:", catid.blue());
                             }
 
-                            mods.iter().for_each(|mod_info| {
-                                mod_info.print_compact();
-                            });
+                            mods.iter()
+                                .sorted_by_key(|xs| xs.mod_id())
+                                .for_each(|mod_info| {
+                                    mod_info.print_compact();
+                                });
                         }
 
                         println!(
