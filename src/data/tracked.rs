@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Display;
 
-use super::{Cacheable, HasEtag};
+use super::Cacheable;
 use crate::nexus::NexusClient;
 
 // Store and retrieve the tracked mods list.
@@ -52,14 +52,6 @@ impl Tracked {
             .collect();
         result
     }
-
-    pub fn get(refresh: bool, db: &kv::Store, nexus: &mut NexusClient) -> Option<Box<Self>> {
-        if refresh {
-            super::refresh::<Self, ()>((), db, nexus)
-        } else {
-            super::find::<Self, ()>((), db, nexus)
-        }
-    }
 }
 
 impl Display for Tracked {
@@ -82,7 +74,7 @@ impl Display for Tracked {
     }
 }
 
-impl HasEtag for Tracked {
+impl Cacheable<()> for Tracked {
     fn etag(&self) -> &str {
         &self.etag
     }
@@ -90,11 +82,13 @@ impl HasEtag for Tracked {
     fn set_etag(&mut self, etag: &str) {
         self.etag = etag.to_string()
     }
-}
 
-impl Cacheable<()> for Tracked {
     fn bucket_name() -> &'static str {
         "mod_ref_lists"
+    }
+
+    fn get(_key: (), refresh: bool, db: &kv::Store, nexus: &mut NexusClient) -> Option<Box<Self>> {
+        super::get::<Self, ()>((), refresh, db, nexus)
     }
 
     fn local(_key: (), db: &kv::Store) -> Option<Box<Self>> {

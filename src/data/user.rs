@@ -1,3 +1,4 @@
+use log::{info, warn};
 use owo_colors::OwoColorize;
 use serde::{Deserialize, Serialize};
 
@@ -8,6 +9,7 @@ use crate::nexus::NexusClient;
 use crate::Cacheable;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(default)]
 pub struct AuthenticatedUser {
     email: String,
     is_premium: bool,
@@ -15,6 +17,7 @@ pub struct AuthenticatedUser {
     name: String,
     profile_url: String,
     user_id: u32,
+    etag: String,
     #[serde(flatten)]
     ignored: Option<HashMap<String, serde_json::Value>>,
 }
@@ -29,13 +32,40 @@ impl Default for AuthenticatedUser {
             is_supporter: false,
             profile_url: "".to_string(),
             ignored: None,
+            etag: "".to_string(),
         }
     }
 }
 
 impl Cacheable<&str> for AuthenticatedUser {
+    fn etag(&self) -> &str {
+        &self.etag
+    }
+
+    fn set_etag(&mut self, etag: &str) {
+        self.etag = etag.to_string()
+    }
+
     fn bucket_name() -> &'static str {
         "authed_users"
+    }
+
+    fn get(
+        _key: &str,
+        _refresh: bool,
+        db: &kv::Store,
+        nexus: &mut NexusClient,
+    ) -> Option<Box<Self>> {
+        // We do not ever rely on cache for this.
+        if let Ok(user) = nexus.validate() {
+            match user.store(db) {
+                Ok(_) => info!("stored authed user"),
+                Err(e) => warn!("failed to store authed user! {:?}", e),
+            }
+            Some(Box::new(user))
+        } else {
+            None
+        }
     }
 
     fn local(key: &str, db: &kv::Store) -> Option<Box<Self>> {

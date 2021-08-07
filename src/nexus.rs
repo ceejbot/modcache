@@ -302,7 +302,13 @@ impl NexusClient {
     }
 
     // Boy, this sure looks like predictable code.
+    /// Validate your Nexus API token.
+    pub fn validate(&mut self) -> anyhow::Result<AuthenticatedUser> {
+        let uri = format!("{}/v1/users/validate.json", NEXUS_BASE);
+        self.get::<AuthenticatedUser>(&uri)
+    }
 
+    /// Fetch info about a specific game by its Nexus `domain name`.
     pub fn gameinfo(&mut self, game: &str, etag: Option<String>) -> Option<GameMetadata> {
         let uri = format!("{}/v1/games/{}.json", NEXUS_BASE, game);
         if let Ok((Some(mut metadata), etag)) = self.conditional_get::<GameMetadata>(&uri, etag) {
@@ -312,6 +318,8 @@ impl NexusClient {
         None
     }
 
+    /// Fetch full information about a mod by game domain name & mod id number.
+    /// These are the same two pieces of information in the url for a mod on the Nexus's site.
     pub fn mod_by_id(
         &mut self,
         game: &str,
@@ -326,11 +334,24 @@ impl NexusClient {
         None
     }
 
-    pub fn validate(&mut self) -> anyhow::Result<AuthenticatedUser> {
-        let uri = format!("{}/v1/users/validate.json", NEXUS_BASE);
-        self.get::<AuthenticatedUser>(&uri)
+    pub fn changelogs(
+        &mut self,
+        game: &str,
+        modid: u32,
+        etag: Option<String>,
+    ) -> Option<Changelogs> {
+        let uri = format!(
+            "{}/v1/games/{}/mods/{}/changelogs.json",
+            NEXUS_BASE, game, modid
+        );
+        if let Ok((Some(mut changelogs), etag)) = self.conditional_get::<Changelogs>(&uri, etag) {
+            changelogs.set_etag(&etag);
+            return Some(changelogs);
+        }
+        None
     }
 
+    /// Fetch the list of mods tracked for all games.
     pub fn tracked(&mut self, etag: Option<String>) -> Option<Tracked> {
         let uri = format!("{}/v1/user/tracked_mods.json", NEXUS_BASE);
         if let Ok((Some(mods), etag)) = self.conditional_get::<Vec<ModReference>>(&uri, etag) {
@@ -339,6 +360,7 @@ impl NexusClient {
         None
     }
 
+    /// Begin tracking a specific mod, identified by game domain name and id.
     pub fn track(&mut self, game: &str, mod_id: u32) -> anyhow::Result<serde_json::Value> {
         let uri = format!(
             "{}/v1/user/tracked_mods.json?domain_name={}",
@@ -347,6 +369,7 @@ impl NexusClient {
         self.post(&uri, &[("mod_id", &format!("{}", mod_id))])
     }
 
+    /// Stop tracking a specific mod, identified by game domain name and id.
     pub fn untrack(&mut self, game: &str, mod_id: u32) -> anyhow::Result<serde_json::Value> {
         let uri = format!(
             "{}/v1/user/tracked_mods.json?domain_name={}",
@@ -355,6 +378,7 @@ impl NexusClient {
         self.delete(&uri, &[("mod_id", &format!("{}", mod_id))])
     }
 
+    /// Get the list of all endorsement decisions made by the authed user.
     pub fn endorsements(&mut self, etag: Option<String>) -> Option<EndorsementList> {
         let uri = format!("{}/v1/user/endorsements.json", NEXUS_BASE);
         if let Ok((Some(mods), etag)) = self.conditional_get::<Vec<UserEndorsement>>(&uri, etag) {
@@ -363,16 +387,20 @@ impl NexusClient {
         None
     }
 
+    /// Get a list of trending mods for a specific game. This list is capped at 10.
     pub fn trending(&mut self, game: &str) -> anyhow::Result<ModInfoList> {
         let uri = format!("{}/v1/games/{}/mods/trending.json", NEXUS_BASE, game);
         self.get::<ModInfoList>(&uri)
     }
 
+    /// Get a list of the ten most-recently-added mods for a game. This list can include
+    /// mods that have not yet been published, or contain incomplete information.
     pub fn latest_added(&mut self, game: &str) -> anyhow::Result<ModInfoList> {
         let uri = format!("{}/v1/games/{}/mods/latest_added.json", NEXUS_BASE, game);
         self.get::<ModInfoList>(&uri)
     }
 
+    /// Get a list of the ten most-recently updated mods for a game.
     pub fn latest_updated(&mut self, game: &str) -> anyhow::Result<ModInfoList> {
         let uri = format!("{}/v1/games/{}/mods/latest_updated.json", NEXUS_BASE, game);
         self.get::<ModInfoList>(&uri)

@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::fmt::Display;
 
 use crate::nexus::NexusClient;
-use crate::{Cacheable, HasEtag};
+use crate::Cacheable;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub enum EndorsementStatus {
@@ -104,14 +104,6 @@ impl EndorsementList {
             .collect();
         result
     }
-
-    pub fn get(refresh: bool, db: &kv::Store, nexus: &mut NexusClient) -> Option<Box<Self>> {
-        if refresh {
-            super::refresh::<Self, ()>((), db, nexus)
-        } else {
-            super::find::<Self, ()>((), db, nexus)
-        }
-    }
 }
 
 impl Display for EndorsementList {
@@ -126,7 +118,7 @@ impl Display for EndorsementList {
     }
 }
 
-impl HasEtag for EndorsementList {
+impl Cacheable<()> for EndorsementList {
     fn etag(&self) -> &str {
         &self.etag
     }
@@ -134,11 +126,13 @@ impl HasEtag for EndorsementList {
     fn set_etag(&mut self, etag: &str) {
         self.etag = etag.to_string()
     }
-}
 
-impl Cacheable<()> for EndorsementList {
     fn bucket_name() -> &'static str {
         "endorsements"
+    }
+
+    fn get(_key: (), refresh: bool, db: &kv::Store, nexus: &mut NexusClient) -> Option<Box<Self>> {
+        super::get::<Self, ()>((), refresh, db, nexus)
     }
 
     fn local(_key: (), db: &kv::Store) -> Option<Box<Self>> {

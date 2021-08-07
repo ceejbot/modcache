@@ -16,8 +16,6 @@ pub mod nexus;
 
 use data::*;
 
-// static MOST_RECENT_ID: u32 = 52368;
-
 // Set up the cli and commands
 #[derive(Clone, Serialize, StructOpt)]
 #[structopt(name = "modcache", about = "ask questions about nexus mod data")]
@@ -76,6 +74,13 @@ enum Command {
         /// Which game the mod is for; Nexus short name
         game: String,
         /// The id of the mod to track
+        mod_id: u32,
+    },
+    /// Get changelogs for a specific mod.
+    Changelogs {
+        /// Which game the mod is for; Nexus short name
+        game: String,
+        /// The id of the mod to fetch changelogs for
         mod_id: u32,
     },
     /// Fetch the list of mods you've endorsed
@@ -157,16 +162,19 @@ fn emit_modlist_with_caption(modlist: Vec<ModInfoFull>, caption: &str) {
 fn show_endorsements(
     game: &str,
     modlist: &[UserEndorsement],
-    refresh: bool,
     store: &kv::Store,
     client: &mut nexus::NexusClient,
 ) {
-    let game_meta = find::<GameMetadata, &str>(game, store, client).unwrap();
-    println!("Endorsements for {}:", game_meta.name().yellow().bold());
+    let game_meta = GameMetadata::get(game, false, store, client).unwrap();
+    println!(
+        "\n{} endorsed for {}:",
+        pluralize_mod(modlist.len()),
+        game_meta.name().yellow().bold()
+    );
     let mut table = Table::new();
     table.set_format(*prettytable::format::consts::FORMAT_CLEAN);
     modlist.iter().for_each(|opinion| {
-        if let Some(mod_info) = ModInfoFull::local((game, opinion.mod_id()), store) {
+        if let Some(mod_info) = ModInfoFull::get((game, opinion.mod_id()), false, store, client) {
             table.add_row(row![
                 format!("{}", opinion.status()),
                 format!(
@@ -175,19 +183,6 @@ fn show_endorsements(
                     mod_info.display_name()
                 ),
             ]);
-        } else if refresh {
-            let key = (game, opinion.mod_id());
-            if let Some(mod_info) = ModInfoFull::fetch(key, client, None) {
-                mod_info.store(store).ok();
-                table.add_row(row![
-                    format!("{}", opinion.status()),
-                    format!(
-                        "\x1b]8;;{}\x1b\\{}\x1b]8;;\x1b\\",
-                        opinion.url(),
-                        mod_info.display_name()
-                    ),
-                ]);
-            }
         } else {
             table.add_row(row![
                 format!("{}", opinion.status()),
@@ -243,13 +238,13 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
             }
         }
         Command::Populate { game, limit } => {
-            let gamemeta = find::<GameMetadata, &str>(&game, &store, &mut nexus);
+            let gamemeta = GameMetadata::get(&game, flags.refresh, &store, &mut nexus);
             if gamemeta.is_none() {
                 warn!("{} can't be found on the Nexus! Bailing.", game);
                 return Ok(());
             }
 
-            let tracked = Tracked::get(flags.refresh, &store, &mut nexus);
+            let tracked = Tracked::get((), flags.refresh, &store, &mut nexus);
             if tracked.is_none() {
                 anyhow::bail!("Unable to fetch any tracked mods.");
             }
@@ -319,7 +314,7 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
             }
         }
         Command::Tracked { game } => {
-            let maybe = Tracked::get(flags.refresh, &store, &mut nexus);
+            let maybe = Tracked::get((), flags.refresh, &store, &mut nexus);
 
             if let Some(tracked) = maybe {
                 if flags.json {
@@ -333,7 +328,7 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                         println!("You aren't tracking any mods for {}", game.yellow().bold());
                     } else {
                         let mut game_meta =
-                            find::<GameMetadata, &str>(&game, &store, &mut nexus).unwrap();
+                            GameMetadata::get(&game, flags.refresh, &store, &mut nexus).unwrap();
                         // bucket mods by category, treating removed and wastebinned mods separately.
                         let mut uncached = 0;
                         // I note that this list of special-cases is looking very pattern-like.
@@ -384,8 +379,12 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                             pluralize_mod(filtered.len()),
                             game_meta.name().yellow().bold()
                         );
-                        println!("{} are in cache.", pluralize_mod(filtered.len() - uncached));
-                        println!("Another {} not yet cached.", pluralize_mod(uncached));
+                        if uncached == 0 {
+                            println!("All {} are in cache.", pluralize_mod(filtered.len()));
+                        } else {
+                            println!("{} are in cache.", pluralize_mod(filtered.len() - uncached));
+                            println!("Another {} not yet cached.", pluralize_mod(uncached));
+                        }
                         println!();
 
                         emit_modlist_with_caption(removed, "removed");
@@ -415,8 +414,34 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                 println!("Whoops. Run with -v to get more info.");
             }
         },
+        Command::Changelogs { game, mod_id } => {
+            let maybe = Changelogs::get((&game, mod_id), flags.refresh, &store, &mut nexus);
+            if let Some(changelogs) = maybe {
+                if flags.json {
+                    let pretty = serde_json::to_string_pretty(&changelogs)?;
+                    println!("{}", pretty);
+                    return Ok(());
+                }
+                if let Some(mod_info) = ModInfoFull::get((&game, mod_id), false, &store, &mut nexus)
+                {
+                    println!(
+                        "\nchangelogs for \x1b]8;;{}\x1b\\{}\x1b]8;;\x1b\\",
+                        mod_info.url(),
+                        mod_info.display_name()
+                    );
+                } else {
+                    println!("changelogs for {} #{}:", game, mod_id);
+                }
+                for (version, logs) in changelogs.versions() {
+                    println!("\n{}:", version.red());
+                    for log in logs {
+                        println!("    {}", log);
+                    }
+                }
+            }
+        }
         Command::Endorsements { game } => {
-            let maybe = EndorsementList::get(flags.refresh, &store, &mut nexus);
+            let maybe = EndorsementList::get((), flags.refresh, &store, &mut nexus);
 
             if let Some(opinions) = maybe {
                 if flags.json {
@@ -428,8 +453,7 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                 let mapping = opinions.get_game_map();
                 if let Some(g) = game {
                     if let Some(modlist) = mapping.get(&g) {
-                        println!("{} opinions expressed on mods for {}.", modlist.len(), g);
-                        show_endorsements(&g, modlist, flags.refresh, &store, &mut nexus);
+                        show_endorsements(&g, modlist, &store, &mut nexus);
                     } else {
                         println!("No opinions expressed on mods for {}.", g);
                     }
@@ -440,7 +464,7 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                         mapping.len().blue()
                     );
                     for (game, modlist) in mapping.iter() {
-                        show_endorsements(game, modlist, flags.refresh, &store, &mut nexus);
+                        show_endorsements(game, modlist, &store, &mut nexus);
                     }
                 }
             } else {

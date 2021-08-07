@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::fmt::Display;
 
 use crate::nexus::NexusClient;
-use crate::{Cacheable, HasEtag};
+use crate::Cacheable;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ModCategory {
@@ -94,22 +94,9 @@ impl GameMetadata {
             None => None,
         }
     }
-
-    pub fn get(
-        name: &str,
-        refresh: bool,
-        db: &kv::Store,
-        nexus: &mut NexusClient,
-    ) -> Option<Box<Self>> {
-        if refresh {
-            super::refresh::<Self, &str>(name, db, nexus)
-        } else {
-            super::find::<Self, &str>(name, db, nexus)
-        }
-    }
 }
 
-impl HasEtag for GameMetadata {
+impl Cacheable<&str> for GameMetadata {
     fn etag(&self) -> &str {
         &self.etag
     }
@@ -117,11 +104,13 @@ impl HasEtag for GameMetadata {
     fn set_etag(&mut self, etag: &str) {
         self.etag = etag.to_string()
     }
-}
 
-impl Cacheable<&str> for GameMetadata {
     fn bucket_name() -> &'static str {
         "games"
+    }
+
+    fn get(key: &str, refresh: bool, db: &kv::Store, nexus: &mut NexusClient) -> Option<Box<Self>> {
+        super::get::<Self, &str>(key, refresh, db, nexus)
     }
 
     fn local(key: &str, db: &kv::Store) -> Option<Box<Self>> {

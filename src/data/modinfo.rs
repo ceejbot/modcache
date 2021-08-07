@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
 use crate::nexus::NexusClient;
-use crate::{Cacheable, EndorsementStatus, HasEtag};
+use crate::{Cacheable, EndorsementStatus};
 
 #[derive(serde::Deserialize, Serialize, Debug, Clone)]
 pub struct ModAuthor {
@@ -111,19 +111,6 @@ impl ModInfoFull {
         format!("{}/{}", key.0, key.1)
     }
 
-    pub fn get(
-        key: (&str, u32),
-        refresh: bool,
-        db: &kv::Store,
-        nexus: &mut NexusClient,
-    ) -> Option<Box<Self>> {
-        if refresh {
-            super::refresh::<ModInfoFull, (&str, u32)>(key, db, nexus)
-        } else {
-            super::find::<ModInfoFull, (&str, u32)>(key, db, nexus)
-        }
-    }
-
     pub fn available(&self) -> bool {
         self.available
     }
@@ -200,16 +187,6 @@ impl ModInfoFull {
     }
 }
 
-impl HasEtag for ModInfoFull {
-    fn etag(&self) -> &str {
-        &self.etag
-    }
-
-    fn set_etag(&mut self, etag: &str) {
-        self.etag = etag.to_string()
-    }
-}
-
 impl Default for ModInfoFull {
     fn default() -> Self {
         ModInfoFull {
@@ -257,8 +234,25 @@ impl Display for ModInfoFull {
 }
 
 impl Cacheable<(&str, u32)> for ModInfoFull {
+    fn etag(&self) -> &str {
+        &self.etag
+    }
+
+    fn set_etag(&mut self, etag: &str) {
+        self.etag = etag.to_string()
+    }
+
     fn bucket_name() -> &'static str {
         "mods"
+    }
+
+    fn get(
+        key: (&str, u32),
+        refresh: bool,
+        db: &kv::Store,
+        nexus: &mut NexusClient,
+    ) -> Option<Box<Self>> {
+        super::get::<Self, (&str, u32)>(key, refresh, db, nexus)
     }
 
     fn local(key: (&str, u32), db: &kv::Store) -> Option<Box<Self>> {
