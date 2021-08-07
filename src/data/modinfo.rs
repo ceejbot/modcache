@@ -107,6 +107,23 @@ pub struct ModInfoFull {
 }
 
 impl ModInfoFull {
+    pub fn key(key: (&str, u32)) -> String {
+        format!("{}/{}", key.0, key.1)
+    }
+
+    pub fn get(
+        key: (&str, u32),
+        refresh: bool,
+        db: &kv::Store,
+        nexus: &mut NexusClient,
+    ) -> Option<Box<Self>> {
+        if refresh {
+            super::refresh::<ModInfoFull, (&str, u32)>(key, db, nexus)
+        } else {
+            super::find::<ModInfoFull, (&str, u32)>(key, db, nexus)
+        }
+    }
+
     pub fn available(&self) -> bool {
         self.available
     }
@@ -121,6 +138,13 @@ impl ModInfoFull {
 
     pub fn mod_id(&self) -> u32 {
         self.mod_id
+    }
+
+    pub fn url(&self) -> String {
+        format!(
+            "https://www.nexusmods.com/{}/mods/{}",
+            self.domain_name, self.mod_id
+        )
     }
 
     pub fn status(&self) -> ModStatus {
@@ -156,16 +180,22 @@ impl ModInfoFull {
         }
     }
 
-    pub fn print_compact(&self) {
+    pub fn compact_info(&self) -> String {
         if let Some(endorse) = &self.endorsement {
-            println!(
-                "    {} <{}> {}",
+            format!(
+                "    \x1b]8;;{}\x1b\\{}\x1b]8;;\x1b\\ <{}> {}",
+                self.url(),
                 self.display_name(),
                 self.uploaded_by.cyan(),
                 endorse.endorse_status.display_for_tracked()
-            );
+            )
         } else {
-            println!("    {} <{}>", self.display_name(), self.uploaded_by.cyan());
+            format!(
+                "    \x1b]8;;{}\x1b\\{}\x1b]8;;\x1b\\ <{}>",
+                self.url(),
+                self.display_name(),
+                self.uploaded_by.cyan()
+            )
         }
     }
 }
@@ -232,7 +262,7 @@ impl Cacheable<(&str, u32)> for ModInfoFull {
     }
 
     fn local(key: (&str, u32), db: &kv::Store) -> Option<Box<Self>> {
-        let compound = format!("{}/{}", key.0, key.1);
+        let compound = ModInfoFull::key(key);
         let bucket = super::bucket::<Self, (&str, u32)>(db).unwrap();
         let found = bucket.get(&*compound).ok()?;
         found.map(Box::new)
@@ -244,7 +274,7 @@ impl Cacheable<(&str, u32)> for ModInfoFull {
 
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
         let bucket = super::bucket::<Self, (&str, u32)>(db).unwrap();
-        let compound = format!("{}/{}", self.domain_name, self.mod_id);
+        let compound = ModInfoFull::key((&self.domain_name, self.mod_id));
         if bucket.set(&*compound, self.clone()).is_ok() {
             Ok(1)
         } else {

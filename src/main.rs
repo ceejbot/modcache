@@ -171,7 +171,7 @@ fn show_endorsements(
                 format!("{}", opinion.status()),
                 format!(
                     "\x1b]8;;{}\x1b\\{}\x1b]8;;\x1b\\",
-                    opinion.get_url(),
+                    opinion.url(),
                     mod_info.display_name()
                 ),
             ]);
@@ -183,7 +183,7 @@ fn show_endorsements(
                     format!("{}", opinion.status()),
                     format!(
                         "\x1b]8;;{}\x1b\\{}\x1b]8;;\x1b\\",
-                        opinion.get_url(),
+                        opinion.url(),
                         mod_info.display_name()
                     ),
                 ]);
@@ -193,7 +193,7 @@ fn show_endorsements(
                 format!("{}", opinion.status()),
                 format!(
                     "\x1b]8;;{}\x1b\\uncached mod id #{}\x1b]8;;\x1b\\",
-                    opinion.get_url(),
+                    opinion.url(),
                     opinion.mod_id()
                 ),
             ]);
@@ -225,14 +225,14 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
 
     match flags.cmd {
         Command::Game { game } => {
-            if let Some(metadata) = find::<GameMetadata, &str>(&game, &store, &mut nexus) {
+            if let Some(metadata) = GameMetadata::get(&game, flags.refresh, &store, &mut nexus) {
                 let pretty = serde_json::to_string_pretty(&metadata)?;
                 println!("{}", pretty);
             }
         }
         Command::Mod { game, mod_id } => {
             if let Some(modinfo) =
-                find::<ModInfoFull, (&str, u32)>((&game, mod_id), &store, &mut nexus)
+                ModInfoFull::get((&game, mod_id), flags.refresh, &store, &mut nexus)
             {
                 if flags.json {
                     let pretty = serde_json::to_string_pretty(&modinfo)?;
@@ -291,7 +291,7 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                 };
 
                 if let Some(fullmod) = maybe_mod {
-                    println!("   {} -> cache", fullmod.name().green());
+                    println!("   {} -> cache", fullmod.compact_info());
                 }
 
                 if fetches < limit {
@@ -375,7 +375,7 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                             mods.iter()
                                 .sorted_by_key(|xs| xs.mod_id())
                                 .for_each(|mod_info| {
-                                    mod_info.print_compact();
+                                    println!("{}", mod_info.compact_info());
                                 });
                         }
 

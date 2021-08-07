@@ -286,6 +286,7 @@ impl NexusClient {
                 anyhow::bail!(e);
             }
         };
+        // We're calling this for the side effects, I'm afraid. This needs refactoring.
         if let Err(e) = self.handle_headers(&response) {
             error!("problem parsing headers: {:?}", e)
         }
@@ -305,7 +306,7 @@ impl NexusClient {
     pub fn gameinfo(&mut self, game: &str, etag: Option<String>) -> Option<GameMetadata> {
         let uri = format!("{}/v1/games/{}.json", NEXUS_BASE, game);
         if let Ok((Some(mut metadata), etag)) = self.conditional_get::<GameMetadata>(&uri, etag) {
-            metadata.set_etag(etag);
+            metadata.set_etag(&etag);
             return Some(metadata);
         }
         None

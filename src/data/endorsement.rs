@@ -52,7 +52,7 @@ impl UserEndorsement {
         self.mod_id
     }
 
-    pub fn get_url(&self) -> String {
+    pub fn url(&self) -> String {
         format!(
             "https://www.nexusmods.com/{}/mods/{}",
             self.domain_name, self.mod_id
