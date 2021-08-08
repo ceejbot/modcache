@@ -349,6 +349,15 @@ impl NexusClient {
         None
     }
 
+    pub fn files(&mut self, game: &str, modid: u32, etag: Option<String>) -> Option<Files> {
+        let uri = format!("{}/v1/games/{}/mods/{}/files.json", NEXUS_BASE, game, modid);
+        if let Ok((Some(mut files), etag)) = self.conditional_get::<Files>(&uri, etag) {
+            files.set_etag(&etag);
+            return Some(files);
+        }
+        None
+    }
+
     /// Fetch the list of mods tracked for all games.
     pub fn tracked(&mut self, etag: Option<String>) -> Option<Tracked> {
         let uri = format!("{}/v1/user/tracked_mods.json", NEXUS_BASE);
@@ -405,7 +414,6 @@ impl NexusClient {
     }
 
     // TODO
-    // /v1/games/:game/mods/:mod/changelogs.json
     // /v1/games/:game/mods/:mod/files.json
     // /v1/games/:game/mods/:mod/files/:file.json
 }

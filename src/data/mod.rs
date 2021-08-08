@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 pub mod changelogs;
 pub mod endorsement;
+pub mod files;
 pub mod game;
 pub mod modinfo;
 pub mod tracked;
@@ -12,6 +13,7 @@ pub mod user;
 
 pub use changelogs::*;
 pub use endorsement::*;
+pub use files::*;
 pub use game::*;
 pub use modinfo::*;
 pub use tracked::*;

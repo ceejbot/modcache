@@ -64,23 +64,30 @@ enum Command {
     },
     /// Track a specific mod
     Track {
-        /// Which game the mod is for; Nexus short name
+        /// Which game the mod belongs to; Nexus short name
         game: String,
         /// The id of the mod to track
         mod_id: u32,
     },
     /// Stop tracking a mod
     Untrack {
-        /// Which game the mod is for; Nexus short name
+        /// Which game the mod belongs to; Nexus short name
         game: String,
         /// The id of the mod to track
         mod_id: u32,
     },
     /// Get changelogs for a specific mod.
     Changelogs {
-        /// Which game the mod is for; Nexus short name
+        /// Which game the mod belongs to; Nexus short name
         game: String,
         /// The id of the mod to fetch changelogs for
+        mod_id: u32,
+    },
+    /// Get the list of files for a specific mod. Not very useful yet.
+    Files {
+        /// Which game the mod belongs to; Nexus short name
+        game: String,
+        /// The id of the mod to fetch files for
         mod_id: u32,
     },
     /// Fetch the list of mods you've endorsed
@@ -533,6 +540,16 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                         println!("    {}", log);
                     }
                 }
+            }
+        }
+        Command::Files { game, mod_id } => {
+            let maybe = Files::get((&game, mod_id), flags.refresh, &store, &mut nexus);
+            if let Some(files) = maybe {
+                let pretty = serde_json::to_string_pretty(&files)?;
+                println!("{}", pretty);
+                return Ok(());
+            } else {
+                println!("Nothing found.");
             }
         }
         Command::Endorsements { game } => {
