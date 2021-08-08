@@ -36,31 +36,31 @@ where
     if let Some(found) = T::local(key.clone(), db) {
         if refresh {
             if let Some(fetched) = T::fetch(key, nexus, Some(found.etag().to_string())) {
-                println!("    refreshed nexus data");
+                println!("    ↪ refreshed nexus data");
                 if fetched.store(db).is_ok() {
-                    info!("cached nexus data");
+                    info!("    ✓ cached nexus data");
                 }
                 Some(fetched)
             } else {
-                info!("no update; responding with cached");
+                info!("    ↩ no update; responding with cached");
                 Some(found)
             }
         } else {
             Some(found)
         }
     } else if let Some(fetched) = T::fetch(key, nexus, None) {
-        println!("    first fetch of nexus data");
+        println!("    ﹢ first fetch of nexus data");
         if fetched.store(db).is_ok() {
-            info!("cached refreshed nexus data");
+            info!("    ✓ cached new nexus data");
         }
         Some(fetched)
     } else {
-        info!("nexus gave us nothing?");
+        info!("    ␀nexus gave us nothing");
         None
     }
 }
 
-/// Given a bucket name and appropriate types, return a bucket for the data.
+/// Given a bucket name and appropriate types, return a kv bucket for the data.
 pub fn bucket<T, K: Debug + Clone>(db: &kv::Store) -> Option<kv::Bucket<'static, &'static str, T>>
 where
     T: Cacheable<K>,
@@ -74,29 +74,34 @@ where
     }
 }
 
-pub trait Cacheable<T>
+/// The main trait for objects we store.
+pub trait Cacheable<K>
 where
     Self: kv::Value,
 {
+    /// Get the name of the bucket where these items are stored.
+    fn bucket_name() -> &'static str;
+    /// Get an item of this type, looking in local storage first then fetching from the Nexus if it
+    /// isn't found locally. Set `refresh` to true to do a conditional GET to the Nexus for updated
+    /// data even if we have a local hit.
+    fn get(key: K, refresh: bool, db: &kv::Store, nexus: &mut NexusClient) -> Option<Box<Self>>;
     /// Get an etag for this data.
     fn etag(&self) -> &str;
     /// Set the etag for this data.
     fn set_etag(&mut self, etag: &str);
-    /// Get the name of the bucket where these items are stored.
-    fn bucket_name() -> &'static str;
     /// Look for the item locally.
-    fn local(key: T, db: &kv::Store) -> Option<Box<Self>>;
-    /// Fetch this item from the Nexus.
-    fn fetch(key: T, nexus: &mut NexusClient, etag: Option<String>) -> Option<Box<Self>>;
+    fn local(key: K, db: &kv::Store) -> Option<Box<Self>>;
     /// Store this item in local cache.
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize>;
-    fn get(key: T, refresh: bool, db: &kv::Store, nexus: &mut NexusClient) -> Option<Box<Self>>;
+    /// Fetch this item from the Nexus.
+    fn fetch(key: K, nexus: &mut NexusClient, etag: Option<String>) -> Option<Box<Self>>;
 }
 
 // no home for this structure yet; it's used by several nexus fetches
 
+/// A list of full mod data objects. Returned by the game-wide trending and updated lists.
 #[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(transparent)]
 pub struct ModInfoList {
     pub mods: Vec<ModInfoFull>,
-    pub etag: String,
 }

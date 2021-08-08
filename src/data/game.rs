@@ -1,11 +1,14 @@
+use itertools::Itertools;
 use owo_colors::OwoColorize;
+use regex::RegexBuilder;
 use serde::{Deserialize, Serialize};
+use unicase::UniCase;
 
 use std::collections::HashMap;
 use std::fmt::Display;
 
+use super::{Cacheable, ModInfoFull};
 use crate::nexus::NexusClient;
-use crate::Cacheable;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ModCategory {
@@ -93,6 +96,48 @@ impl GameMetadata {
             Some(m) => m.get(&id).cloned(),
             None => None,
         }
+    }
+
+    /// Get all mods cached for this game.
+    pub fn mods(&self, db: &kv::Store) -> Vec<ModInfoFull> {
+        // TODO sorting
+        let prefix = format!("{}/", &self.domain_name);
+        ModInfoFull::by_prefix(&prefix, db)
+            .into_iter()
+            .sorted_by(|left, right| UniCase::new(left.name()).cmp(&UniCase::new(right.name())))
+            .collect()
+    }
+
+    /// Get all mods for this game with names that match the given filter pattern.
+    /// Case-insensitive, but otherwise a very naive match.
+    pub fn mods_name_match(&self, filter: &str, db: &kv::Store) -> Vec<ModInfoFull> {
+        let prefix = format!("{}/", &self.domain_name);
+        let candidates = ModInfoFull::by_prefix(&prefix, db);
+        let patt = RegexBuilder::new(filter)
+            .case_insensitive(true)
+            .build()
+            .unwrap();
+        candidates
+            .into_iter()
+            .filter(|modinfo| patt.is_match(&modinfo.name()))
+            .collect()
+    }
+
+    /// Get all mods for this game with names or summaries that match the given filter pattern.
+    /// Case-insensitive, but otherwise a very naive match.
+    // Note repetition with previous function. Searching needs some abstractions.
+    pub fn mods_match_text(&self, filter: &str, db: &kv::Store) -> Vec<ModInfoFull> {
+        let prefix = format!("{}/", &self.domain_name);
+        let candidates = ModInfoFull::by_prefix(&prefix, db);
+        let patt = RegexBuilder::new(filter)
+            .case_insensitive(true)
+            .build()
+            .unwrap();
+        candidates
+            .into_iter()
+            .filter(|modinfo| patt.is_match(&modinfo.name()) || patt.is_match(modinfo.summary()))
+            .sorted_by(|left, right| UniCase::new(left.name()).cmp(&UniCase::new(right.name())))
+            .collect()
     }
 }
 

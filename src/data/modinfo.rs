@@ -1,8 +1,9 @@
 // All structs and trait impls supporting the full mod info response from the Nexus.
 
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use owo_colors::OwoColorize;
 use serde::{Deserialize, Serialize};
+use terminal_size::*;
 
 use std::fmt::Display;
 
@@ -111,12 +112,37 @@ impl ModInfoFull {
         format!("{}/{}", key.0, key.1)
     }
 
+    pub fn by_prefix(prefix: &str, db: &kv::Store) -> Vec<Self> {
+        let bucket = super::bucket::<Self, (&str, u32)>(db).unwrap();
+
+        let mut result: Vec<Self> = Vec::new();
+        for item in bucket.iter_prefix(prefix).flatten() {
+            if let Ok(modinfo) = item.value() {
+                result.push(modinfo);
+            }
+        }
+
+        result
+    }
+
     pub fn available(&self) -> bool {
         self.available
     }
 
     pub fn name(&self) -> String {
         self.name.clone()
+    }
+
+    pub fn summary(&self) -> &str {
+        &self.summary
+    }
+
+    pub fn summary_cleaned(&self) -> String {
+        self.summary.replace("<br />", "\n")
+    }
+
+    pub fn description(&self) -> &str {
+        &self.description
     }
 
     pub fn category_id(&self) -> u16 {
@@ -170,7 +196,7 @@ impl ModInfoFull {
     pub fn compact_info(&self) -> String {
         if let Some(endorse) = &self.endorsement {
             format!(
-                "    \x1b]8;;{}\x1b\\{}\x1b]8;;\x1b\\ <{}> {}",
+                "\x1b]8;;{}\x1b\\{}\x1b]8;;\x1b\\ <{}> {}",
                 self.url(),
                 self.display_name(),
                 self.uploaded_by.cyan(),
@@ -178,7 +204,7 @@ impl ModInfoFull {
             )
         } else {
             format!(
-                "    \x1b]8;;{}\x1b\\{}\x1b]8;;\x1b\\ <{}>",
+                "\x1b]8;;{}\x1b\\{}\x1b]8;;\x1b\\ <{}>",
                 self.url(),
                 self.display_name(),
                 self.uploaded_by.cyan()
@@ -221,14 +247,23 @@ impl Default for ModInfoFull {
 
 impl Display for ModInfoFull {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let width: usize = if let Some((Width(w), Height(_h))) = terminal_size() {
+            w as usize - 2
+        } else {
+            72
+        };
+        let summary = textwrap::fill(&self.summary_cleaned(), width);
+        let dt = match self.updated_time.parse::<DateTime<Utc>>() {
+            Ok(v) => v.format("%c").to_string(),
+            Err(_) => self.updated_time.clone(),
+        };
         write!(
             f,
-            "{}\n{} @ {}\nuploaded by {}\n\n{}\n",
-            self.name.green(),
-            self.version,
-            self.updated_time,
-            self.uploaded_by,
-            self.summary
+            "{}\nversion {} updated {}\n\n{}\n",
+            self.compact_info(),
+            self.version.red(),
+            dt.blue(),
+            &summary
         )
     }
 }

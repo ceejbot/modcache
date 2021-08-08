@@ -93,6 +93,27 @@ enum Command {
         #[structopt(default_value = "skyrimspecialedition")]
         game: String,
     },
+    /// Get all mods locally cached for this game by slug
+    Mods {
+        #[structopt(default_value = "skyrimspecialedition")]
+        game: String,
+    },
+    /// Find mods with names matching the given string, for the named game.
+    ByName {
+        /// Look for mods with names similar to this
+        name: String,
+        /// The slug for the game to filter by.
+        #[structopt(default_value = "skyrimspecialedition")]
+        game: String,
+    },
+    /// Find mods that mention this string in their names or text summaries.
+    Search {
+        /// Look for mods that mention this string
+        text: String,
+        /// The slug for the game to filter by.
+        #[structopt(default_value = "skyrimspecialedition")]
+        game: String,
+    },
     /// Show the 10 top all-time trending mods for a game
     Trending {
         #[structopt(default_value = "skyrimspecialedition")]
@@ -223,6 +244,80 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
             if let Some(metadata) = GameMetadata::get(&game, flags.refresh, &store, &mut nexus) {
                 let pretty = serde_json::to_string_pretty(&metadata)?;
                 println!("{}", pretty);
+            } else {
+                println!(
+                    "No game identified as {} found on the Nexus. Recheck the slug!",
+                    game.yellow().bold()
+                );
+            }
+        }
+        Command::Mods { game } => {
+            if let Some(metadata) = GameMetadata::get(&game, flags.refresh, &store, &mut nexus) {
+                for m in metadata.mods(&store).into_iter() {
+                    if flags.json {
+                        let pretty = serde_json::to_string_pretty(&m)?;
+                        println!("{}", pretty);
+                    } else {
+                        println!("{}", m);
+                    }
+                }
+            } else {
+                println!(
+                    "No game identified as {} found on the Nexus. Recheck the slug!",
+                    game.yellow().bold()
+                );
+            }
+        }
+        Command::ByName { name, game } => {
+            if let Some(metadata) = GameMetadata::get(&game, flags.refresh, &store, &mut nexus) {
+                for m in metadata.mods_name_match(&name, &store).into_iter() {
+                    if flags.json {
+                        let pretty = serde_json::to_string_pretty(&m)?;
+                        println!("{}", pretty);
+                    } else {
+                        println!("{}", m);
+                    }
+                }
+            } else {
+                println!(
+                    "No game identified as {} found on the Nexus. Recheck the slug!",
+                    game.yellow().bold()
+                );
+            }
+        }
+        Command::Search { text, game } => {
+            if let Some(metadata) = GameMetadata::get(&game, flags.refresh, &store, &mut nexus) {
+                let mods = metadata.mods_match_text(&text, &store);
+                if flags.json {
+                    let pretty = serde_json::to_string_pretty(&mods)?;
+                    println!("{}", pretty);
+                } else {
+                    if mods.is_empty() {
+                        println!("\nNo mods found that match `{}`", text);
+                    } else if mods.len() == 1 {
+                        println!(
+                            "\nOne match found for `{}` in {}:\n",
+                            text,
+                            metadata.name().yellow().bold()
+                        );
+                    } else {
+                        println!(
+                            "\n{} matches found for `{}` in {}:\n",
+                            mods.len(),
+                            text,
+                            metadata.name().yellow().bold()
+                        );
+                    }
+
+                    for m in mods.into_iter() {
+                        println!("{}", m);
+                    }
+                }
+            } else {
+                println!(
+                    "No game identified as {} found on the Nexus. Recheck the slug!",
+                    game.yellow().bold()
+                );
             }
         }
         Command::Mod { game, mod_id } => {
@@ -370,7 +465,7 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                             mods.iter()
                                 .sorted_by_key(|xs| xs.mod_id())
                                 .for_each(|mod_info| {
-                                    println!("{}", mod_info.compact_info());
+                                    println!("    {}", mod_info.compact_info());
                                 });
                         }
 

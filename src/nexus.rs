@@ -159,14 +159,12 @@ impl NexusClient {
             return Ok((None, etag));
         }
 
-        let payload = response.into_json::<T>();
-
-        match payload {
+        match response.into_json::<T>() {
+            Ok(v) => Ok((Some(v), etag)),
             Err(e) => {
                 error!("problem deserializing: {:?}", e);
                 Err(anyhow::Error::new(e))
             }
-            Ok(v) => Ok((Some(v), etag)),
         }
     }
 
