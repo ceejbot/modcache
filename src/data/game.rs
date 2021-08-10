@@ -135,7 +135,12 @@ impl GameMetadata {
             .unwrap();
         candidates
             .into_iter()
-            .filter(|modinfo| patt.is_match(&modinfo.name()) || patt.is_match(modinfo.summary()))
+            .filter(|modinfo| {
+                patt.is_match(&modinfo.name())
+                    || patt.is_match(modinfo.summary())
+                    || patt.is_match(modinfo.uploaded_by())
+                    || patt.is_match(modinfo.author())
+            })
             .sorted_by(|left, right| UniCase::new(left.name()).cmp(&UniCase::new(right.name())))
             .collect()
     }

@@ -153,6 +153,14 @@ impl ModInfoFull {
         self.mod_id
     }
 
+    pub fn author(&self) -> &str {
+        &self.author
+    }
+
+    pub fn uploaded_by(&self) -> &str {
+        &self.uploaded_by
+    }
+
     pub fn url(&self) -> String {
         format!(
             "https://www.nexusmods.com/{}/mods/{}",
