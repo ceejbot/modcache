@@ -267,7 +267,7 @@ impl Display for ModInfoFull {
         };
         write!(
             f,
-            "{}\nversion {} updated {}\n\n{}\n",
+            "{}\nversion {} updated {}\n{}\n",
             self.compact_info(),
             self.version.red(),
             dt.blue(),

@@ -121,6 +121,13 @@ enum Command {
         #[structopt(default_value = "skyrimspecialedition")]
         game: String,
     },
+    /// Find mods for this game that are hidden, probably so you can untrack them.
+    Hidden {
+        /// The slug for the game to consider.
+        /// The slug for the game to filter by.
+        #[structopt(default_value = "skyrimspecialedition")]
+        game: String,
+    },
     /// Show the 10 top all-time trending mods for a game
     Trending {
         #[structopt(default_value = "skyrimspecialedition")]
@@ -312,6 +319,42 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                             "\n{} matches found for `{}` in {}:\n",
                             mods.len(),
                             text,
+                            metadata.name().yellow().bold()
+                        );
+                    }
+
+                    for m in mods.into_iter() {
+                        println!("{}", m);
+                    }
+                }
+            } else {
+                println!(
+                    "No game identified as {} found on the Nexus. Recheck the slug!",
+                    game.yellow().bold()
+                );
+            }
+        }
+        Command::Hidden { game } => {
+            if let Some(metadata) = GameMetadata::get(&game, flags.refresh, &store, &mut nexus) {
+                let mods = metadata.mods_hidden(&store);
+                if flags.json {
+                    let pretty = serde_json::to_string_pretty(&mods)?;
+                    println!("{}", pretty);
+                } else {
+                    if mods.is_empty() {
+                        println!(
+                            "\nNo hidden mods in cache for {}",
+                            metadata.name().yellow().bold()
+                        );
+                    } else if mods.len() == 1 {
+                        println!(
+                            "\nOne hidden mod in cache for {}:\n",
+                            metadata.name().yellow().bold()
+                        );
+                    } else {
+                        println!(
+                            "\n{} hidden mods in cache for {}:\n",
+                            mods.len(),
                             metadata.name().yellow().bold()
                         );
                     }

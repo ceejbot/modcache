@@ -7,7 +7,7 @@ use unicase::UniCase;
 use std::collections::HashMap;
 use std::fmt::Display;
 
-use super::{Cacheable, ModInfoFull};
+use super::{Cacheable, ModInfoFull, ModStatus};
 use crate::nexus::NexusClient;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -142,6 +142,16 @@ impl GameMetadata {
                     || patt.is_match(modinfo.author())
             })
             .sorted_by(|left, right| UniCase::new(left.name()).cmp(&UniCase::new(right.name())))
+            .collect()
+    }
+
+    pub fn mods_hidden(&self, db: &kv::Store) -> Vec<ModInfoFull> {
+        let prefix = format!("{}/", &self.domain_name);
+        let candidates = ModInfoFull::by_prefix(&prefix, db);
+        candidates
+            .into_iter()
+            .filter(|modinfo| matches!(modinfo.status(), ModStatus::Hidden))
+            .sorted_by(|left, right| left.mod_id().cmp(&right.mod_id()))
             .collect()
     }
 }
