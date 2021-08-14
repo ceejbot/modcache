@@ -145,12 +145,24 @@ impl GameMetadata {
             .collect()
     }
 
+    // I learned a surprising thing about rust when I tried to make a single function
+    // to which I pass the enum variant I want to match against.
     pub fn mods_hidden(&self, db: &kv::Store) -> Vec<ModInfoFull> {
         let prefix = format!("{}/", &self.domain_name);
         let candidates = ModInfoFull::by_prefix(&prefix, db);
         candidates
             .into_iter()
             .filter(|modinfo| matches!(modinfo.status(), ModStatus::Hidden))
+            .sorted_by(|left, right| left.mod_id().cmp(&right.mod_id()))
+            .collect()
+    }
+
+    pub fn mods_removed(&self, db: &kv::Store) -> Vec<ModInfoFull> {
+        let prefix = format!("{}/", &self.domain_name);
+        let candidates = ModInfoFull::by_prefix(&prefix, db);
+        candidates
+            .into_iter()
+            .filter(|modinfo| matches!(modinfo.status(), ModStatus::Removed))
             .sorted_by(|left, right| left.mod_id().cmp(&right.mod_id()))
             .collect()
     }

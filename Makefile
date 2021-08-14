@@ -8,7 +8,7 @@ release: bin clean
 	@cp target/release/modcache bin/
 
 clean:
-	@rm bin/modcache
+	@rm -f bin/modcache
 
 spotless:
 	cargo clean

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use dotenv::dotenv;
 use itertools::Itertools;
@@ -69,12 +69,17 @@ enum Command {
         /// The id of the mod to track
         mod_id: u32,
     },
-    /// Stop tracking a mod
+    /// Stop tracking a mod or list of mods, by id
     Untrack {
-        /// Which game the mod belongs to; Nexus short name
+        /// Which game the mods belong to; Nexus short name
         game: String,
-        /// The id of the mod to track
-        mod_id: u32,
+        /// The ids of the mods to stop trackings
+        ids: Vec<u32>,
+    },
+    /// Stop tracking all removed mods for a specific game
+    UntrackRemoved {
+        /// Which game to clean up your tracking list for; Nexus short name
+        game: String,
     },
     /// Get changelogs for a specific mod.
     Changelogs {
@@ -124,7 +129,12 @@ enum Command {
     /// Find mods for this game that are hidden, probably so you can untrack them.
     Hidden {
         /// The slug for the game to consider.
-        /// The slug for the game to filter by.
+        #[structopt(default_value = "skyrimspecialedition")]
+        game: String,
+    },
+    /// Find mods for this game that are removed, probably so you can untrack them.
+    Removed {
+        /// The slug for the game to consider.
         #[structopt(default_value = "skyrimspecialedition")]
         game: String,
     },
@@ -360,7 +370,34 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                     }
 
                     for m in mods.into_iter() {
-                        println!("{}", m);
+                        println!("{}", m.compact_info());
+                    }
+                }
+            } else {
+                println!(
+                    "No game identified as {} found on the Nexus. Recheck the slug!",
+                    game.yellow().bold()
+                );
+            }
+        }
+        Command::Removed { game } => {
+            if let Some(metadata) = GameMetadata::get(&game, flags.refresh, &store, &mut nexus) {
+                let mods = metadata.mods_removed(&store);
+                if flags.json {
+                    let pretty = serde_json::to_string_pretty(&mods)?;
+                    println!("{}", pretty);
+                } else {
+                    if mods.is_empty() {
+                        println!(
+                            "\nNo removed mods in cache for {}",
+                            metadata.name().yellow().bold()
+                        );
+                    } else {
+                        println!("\nRemoved mods for {}:\n", metadata.name().yellow().bold());
+                    }
+
+                    for m in mods.into_iter() {
+                        println!("{}", m.compact_info());
                     }
                 }
             } else {
@@ -550,15 +587,50 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                 println!("Whoops. Run with -v to get more info.");
             }
         },
-        Command::Untrack { game, mod_id } => match nexus.untrack(&game, mod_id) {
-            Ok(message) => {
-                let pretty = serde_json::to_string_pretty(&message)?;
-                println!("{}", pretty);
+        Command::Untrack { game, ids } => {
+            for mod_id in ids.iter() {
+                match nexus.untrack(&game, *mod_id) {
+                    Ok(message) => {
+                        let pretty = serde_json::to_string_pretty(&message)?;
+                        println!("{}", pretty);
+                    }
+                    Err(e) => {
+                        println!("Error untracking {}:\n{:?}", mod_id, e);
+                    }
+                }
             }
-            Err(_) => {
-                println!("Whoops. Run with -v to get more info.");
+        }
+        Command::UntrackRemoved { game } => {
+            if let Some(metadata) = GameMetadata::get(&game, flags.refresh, &store, &mut nexus) {
+                let maybe = Tracked::get((), flags.refresh, &store, &mut nexus);
+                if let Some(all_tracked) = maybe {
+                    let tracked: HashSet<u32> = all_tracked
+                        .by_game(&game)
+                        .iter()
+                        .map(|xs| xs.mod_id)
+                        .collect();
+                    let mods = metadata.mods_removed(&store);
+                    for m in mods.into_iter() {
+                        // we minimize api calls to the nexus
+                        if tracked.contains(&m.mod_id()) {
+                            match nexus.untrack(&game, m.mod_id()) {
+                                Ok(_) => {
+                                    println!("untracked {}", m.mod_id().red());
+                                }
+                                Err(e) => {
+                                    println!("Error untracking {}:\n{:?}", m.mod_id(), e);
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                println!(
+                    "No game identified as {} found on the Nexus. Recheck the slug!",
+                    game.yellow().bold()
+                );
             }
-        },
+        }
         Command::Changelogs { game, mod_id } => {
             let maybe = Changelogs::get((&game, mod_id), flags.refresh, &store, &mut nexus);
             if let Some(changelogs) = maybe {
