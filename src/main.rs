@@ -138,6 +138,12 @@ enum Command {
         #[structopt(default_value = "skyrimspecialedition")]
         game: String,
     },
+    /// Find mods for this game that were wastebinned by their authors.
+    Wastebinned {
+        /// The slug for the game to consider.
+        #[structopt(default_value = "skyrimspecialedition")]
+        game: String,
+    },
     /// Show the 10 top all-time trending mods for a game
     Trending {
         #[structopt(default_value = "skyrimspecialedition")]
@@ -398,6 +404,33 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
 
                     for m in mods.into_iter() {
                         println!("{}", m.compact_info());
+                    }
+                }
+            } else {
+                println!(
+                    "No game identified as {} found on the Nexus. Recheck the slug!",
+                    game.yellow().bold()
+                );
+            }
+        }
+        Command::Wastebinned { game } => {
+            if let Some(metadata) = GameMetadata::get(&game, flags.refresh, &store, &mut nexus) {
+                let mods = metadata.mods_wastebinned(&store);
+                if flags.json {
+                    let pretty = serde_json::to_string_pretty(&mods)?;
+                    println!("{}", pretty);
+                } else {
+                    if mods.is_empty() {
+                        println!(
+                            "\nNo wastebinned mods in cache for {}",
+                            metadata.name().yellow().bold()
+                        );
+                    } else {
+                        println!("\nWastebinned mods for {}:\n", metadata.name().yellow().bold());
+                    }
+
+                    for m in mods.into_iter() {
+                        println!("{}\n{}\n", m.compact_info(), m.url());
                     }
                 }
             } else {
