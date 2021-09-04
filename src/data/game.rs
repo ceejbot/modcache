@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use num_format::{Locale, ToFormattedString};
 use owo_colors::OwoColorize;
 use regex::RegexBuilder;
 use serde::{Deserialize, Serialize};
@@ -21,8 +22,8 @@ pub struct ModCategory {
 }
 
 impl ModCategory {
-    pub fn name(&self) -> String {
-        self.name.clone()
+    pub fn name(&self) -> &str {
+        &self.name
     }
 }
 
@@ -82,6 +83,10 @@ impl GameMetadata {
         self.name.clone()
     }
 
+    pub fn categories(&self) -> &Vec<ModCategory> {
+        &self.categories
+    }
+
     pub fn category_from_id(&mut self, id: u16) -> Option<ModCategory> {
         if self.category_map.is_none() {
             let m: HashMap<u16, ModCategory> = self
@@ -96,6 +101,22 @@ impl GameMetadata {
             Some(m) => m.get(&id).cloned(),
             None => None,
         }
+    }
+
+    /// Display full information about a game, its categories, and any mods in cache for it.
+    pub fn emit_fancy(&self, _db: &kv::Store) {
+        println!("{}", self.name().yellow().bold());
+        println!("{} mods by {} authors", self.mods.to_formatted_string(&Locale::en).bold(), self.authors.bold());
+        println!("{} downloads", self.downloads.to_formatted_string(&Locale::en).bold());
+        println!();
+
+        let cats: Vec<String> = self
+            .categories()
+            .iter()
+            .sorted_by(|left, right| left.name().cmp(right.name()))
+            .map(|cat| format!("    {}", cat.name().purple()))
+            .collect();
+        crate::print_in_grid(cats, 2);
     }
 
     /// Get all mods cached for this game.

@@ -4,7 +4,7 @@
 
 Another use case is for me to scan my list of tracked mods to see which ones I haven't downloaded or kept up to date.
 
-It remains to be seen how practical it will be to cache mod metadata locally given API rate limits. It might be more practical to scrape their fully-rendered website.
+It remains to be seen how practical it will be to cache mod metadata locally given API rate limits. It might be more practical to scrape their fully-rendered website (respecting any `robots.txt`, of course).
 
 Install Rust for your platform with [rustup](https://rustup.rs). Copy `.env-example` into `.env` and add your api key, which you can find [on the Nexus settings page](https://www.nexusmods.com/users/myaccount?tab=api). Run `cargo run -- --help` for usage.
 
@@ -47,7 +47,7 @@ SUBCOMMANDS:
 
 My workflow was to run `modcache tracked` to get my full tracked modlist into cache, then run `modcache populate skyrimspecialedition 90` every hour until I had the 2K+ mods I track stored locally.
 
-`--refresh` uses the weak etag the Nexus returns to see if their data has changed. This dings you an API request even if you get a 304 back.
+`--refresh` uses the weak etag the Nexus returns to see if their data has changed. This dings you an API request even if you get a 304 back, which is disappointing.
 
 ## References
 

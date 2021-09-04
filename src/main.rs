@@ -168,7 +168,7 @@ enum Command {
     },
 }
 
-fn print_in_grid(items: Vec<impl ToString>) {
+pub fn print_in_grid(items: Vec<impl ToString>, column_hint: usize) {
     let width = if let Some((Width(w), Height(_h))) = terminal_size() {
         w - 2
     } else {
@@ -187,10 +187,11 @@ fn print_in_grid(items: Vec<impl ToString>) {
         // https://github.com/ogham/rust-term-grid/issues/11
         println!("{}", g);
     } else {
-        println!("{}", grid.fit_into_columns(10));
+        println!("{}", grid.fit_into_columns(column_hint));
     }
 }
 
+/// Given a count, return a string with the count + the word `mod` pluralized for English.
 fn pluralize_mod(count: usize) -> String {
     if count == 1 {
         format!("{} mod", "one".blue())
@@ -206,10 +207,11 @@ fn emit_modlist_with_caption(modlist: Vec<ModInfoFull>, caption: &str) {
             pluralize_mod(modlist.len()).bold(),
             caption.bold()
         );
-        print_in_grid(modlist.iter().map(|xs| xs.mod_id()).collect());
+        print_in_grid(modlist.iter().map(|xs| xs.mod_id()).collect(), 10);
     }
 }
 
+/// Display mod endorsements for a specific game, sorted by status.
 fn show_endorsements(
     game: &str,
     modlist: &[UserEndorsement],
@@ -218,34 +220,52 @@ fn show_endorsements(
 ) {
     let game_meta = GameMetadata::get(game, false, store, client).unwrap();
     println!(
-        "\n{} endorsed for {}:",
+        "\n{} opinions for {}",
         pluralize_mod(modlist.len()),
         game_meta.name().yellow().bold()
     );
-    let mut table = Table::new();
-    table.set_format(*prettytable::format::consts::FORMAT_CLEAN);
-    modlist.iter().for_each(|opinion| {
-        if let Some(mod_info) = ModInfoFull::get((game, opinion.mod_id()), false, store, client) {
-            table.add_row(row![
-                format!("{}", opinion.status()),
-                format!(
-                    "\x1b]8;;{}\x1b\\{}\x1b]8;;\x1b\\",
-                    opinion.url(),
-                    mod_info.display_name()
-                ),
-            ]);
-        } else {
-            table.add_row(row![
-                format!("{}", opinion.status()),
-                format!(
-                    "\x1b]8;;{}\x1b\\uncached mod id #{}\x1b]8;;\x1b\\",
-                    opinion.url(),
-                    opinion.mod_id()
-                ),
-            ]);
-        }
-    });
-    println!("{}", table);
+    // I think there's a split function I could use instead.
+    let abstained: Vec<&UserEndorsement> = modlist
+        .iter()
+        .filter(|m| matches!(m.status(), EndorsementStatus::Abstained))
+        .collect();
+    let endorsed: Vec<&UserEndorsement> = modlist
+        .iter()
+        .filter(|m| !matches!(m.status(), EndorsementStatus::Abstained))
+        .collect();
+
+    let mut emit_table = |list: Vec<&UserEndorsement>| {
+        let mut table = Table::new();
+        table.set_format(*prettytable::format::consts::FORMAT_CLEAN);
+        list.iter().for_each(|opinion| {
+            if let Some(mod_info) = ModInfoFull::get((game, opinion.mod_id()), false, store, client)
+            {
+                table.add_row(row![
+                    format!("{}", opinion.status()),
+                    format!(
+                        "\x1b]8;;{}\x1b\\{}\x1b]8;;\x1b\\",
+                        opinion.url(),
+                        mod_info.display_name()
+                    ),
+                ]);
+            } else {
+                table.add_row(row![
+                    format!("{}", opinion.status()),
+                    format!(
+                        "\x1b]8;;{}\x1b\\uncached mod id #{}\x1b]8;;\x1b\\",
+                        opinion.url(),
+                        opinion.mod_id()
+                    ),
+                ]);
+            }
+        });
+        println!("{}", table);
+    };
+
+    println!("endorsed {}:", pluralize_mod(endorsed.len()));
+    emit_table(endorsed);
+    println!("abstained on {}:", pluralize_mod(abstained.len()));
+    emit_table(abstained);
 }
 
 fn main() -> anyhow::Result<(), anyhow::Error> {
@@ -272,8 +292,12 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
     match flags.cmd {
         Command::Game { game } => {
             if let Some(metadata) = GameMetadata::get(&game, flags.refresh, &store, &mut nexus) {
-                let pretty = serde_json::to_string_pretty(&metadata)?;
-                println!("{}", pretty);
+                if flags.json {
+                    let pretty = serde_json::to_string_pretty(&metadata)?;
+                    println!("{}", pretty);
+                } else {
+                    metadata.emit_fancy(&store);
+                }
             } else {
                 println!(
                     "No game identified as {} found on the Nexus. Recheck the slug!",
@@ -426,7 +450,10 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                             metadata.name().yellow().bold()
                         );
                     } else {
-                        println!("\nWastebinned mods for {}:\n", metadata.name().yellow().bold());
+                        println!(
+                            "\nWastebinned mods for {}:\n",
+                            metadata.name().yellow().bold()
+                        );
                     }
 
                     for m in mods.into_iter() {

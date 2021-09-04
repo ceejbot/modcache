@@ -17,6 +17,7 @@ itertools = "0.10.1"
 kv = { version = "0.22.0", features = ["json-value"]}
 log = "0.4.14"
 loggerv = "0.7.2"
+num-format = "0.4.0"
 owo-colors = "2.0.0"
 prettytable-rs = "0.8.0"
 regex = "1.5.4"
