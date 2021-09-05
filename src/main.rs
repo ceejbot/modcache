@@ -73,7 +73,7 @@ enum Command {
     Untrack {
         /// Which game the mods belong to; Nexus short name
         game: String,
-        /// The ids of the mods to stop trackings
+        /// The ids of the mods to stop tracking
         ids: Vec<u32>,
     },
     /// Stop tracking all removed mods for a specific game
@@ -95,10 +95,24 @@ enum Command {
         /// The id of the mod to fetch files for
         mod_id: u32,
     },
-    /// Fetch the list of mods you've endorsed
+    /// Fetch the list of mods you have endorsed
     Endorsements {
-        /// Optionally filter endorsements by this game name.
+        /// Optionally filter displayed endorsements by this game name.
         game: Option<String>,
+    },
+    /// Endorse a mod or list of mods
+    Endorse {
+        /// Which game the mods belong to; Nexus short name
+        game: String,
+        /// The ids of the mods to endorse
+        ids: Vec<u32>,
+    },
+    /// Abstain from endorsing a mod.
+    Abstain {
+        /// Which game the mod belongs to; Nexus short name
+        game: String,
+        /// The id of the mod to refuse to endorse
+        mod_id: u32,
     },
     /// Get Nexus metadata about a game by slug
     Game {
@@ -756,6 +770,38 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                 }
             } else {
                 error!("Something went wrong fetching endorsements. Rerun with -v to get more details.");
+            }
+        }
+        Command::Endorse { game, ids } => {
+            for mod_id in ids.iter() {
+                match nexus.abstain(&game, *mod_id) {
+                    Ok(response) => {
+                        if flags.json {
+                            let pretty = serde_json::to_string_pretty(&response)?;
+                            println!("{}", pretty);
+                        } else {
+                            println!(
+                                "Endorsement status for mod {} is now {}",
+                                mod_id, response.status
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        println!("Error endorsing {}:\n{:?}", mod_id, e);
+                    }
+                }
+            }
+        }
+        Command::Abstain { game, mod_id } => {
+            let response = nexus.abstain(&game, mod_id)?;
+            if flags.json {
+                let pretty = serde_json::to_string_pretty(&response)?;
+                println!("{}", pretty);
+            } else {
+                println!(
+                    "Endorsement status for mod {} is now {}",
+                    mod_id, response.status
+                );
             }
         }
         Command::Trending { game } => {

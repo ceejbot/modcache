@@ -1,14 +1,14 @@
 # modcache
 
-`modcache` is a Rust cli program that builds and then queries a local cache of the [Nexus Mods](https://www.nexusmods.com) [Skyrim SE](https://www.nexusmods.com/skyrimspecialedition) registry. I find Nexus's own categorization and search tools to be inadequate and was interested in discovering if a local restructuring of the data would be useful. The data they make available from their API is missing user-provided tags, sadly, but perhaps some full-text search will help?
+`modcache` is a Rust cli program that builds and then queries a local cache of the sections [Nexus Mods](https://www.nexusmods.com) registry. I play a lot of Skyrim, and have a long active modlist and and even longer list of [Skyrim SE](https://www.nexusmods.com/skyrimspecialedition) mods I'm interested in shuffling around. I find Nexus's own categorization and search tools to be inadequate and was interested in discovering if a local restructuring of the data would be useful. The data they make available from their API is missing user-provided tags, sadly, but perhaps some full-text search will help?
 
 Another use case is for me to scan my list of tracked mods to see which ones I haven't downloaded or kept up to date.
 
 It remains to be seen how practical it will be to cache mod metadata locally given API rate limits. It might be more practical to scrape their fully-rendered website (respecting any `robots.txt`, of course).
 
-Install Rust for your platform with [rustup](https://rustup.rs). Copy `.env-example` into `.env` and add your api key, which you can find [on the Nexus settings page](https://www.nexusmods.com/users/myaccount?tab=api). Run `cargo run -- --help` for usage.
+Install Rust for your platform with [rustup](https://rustup.rs). Copy `.env-example` into `.env` and add your api key, which you can find [on the Nexus settings page](https://www.nexusmods.com/users/myaccount?tab=api). Run `cargo run -- help` for usage. `cargo run -- <command> --help` shows detailed help for that command.
 
-```sh
+```text
 modcache 0.1.0
 ask questions about nexus mod data
 
@@ -23,9 +23,11 @@ FLAGS:
     -v, --verbose    Pass -v or -vv to increase verbosity
 
 SUBCOMMANDS:
+    abstain            Abstain from endorsing a mod
     by-name            Find mods with names matching the given string, for the named game
     changelogs         Get changelogs for a specific mod
-    endorsements       Fetch the list of mods you've endorsed
+    endorse            Endorse a mod or list of mods
+    endorsements       Fetch the list of mods you have endorsed
     files              Get the list of files for a specific mod. Not very useful yet
     game               Get Nexus metadata about a game by slug
     help               Prints this message or the help of the given subcommand(s)
@@ -43,11 +45,12 @@ SUBCOMMANDS:
     untrack-removed    Stop tracking all removed mods for a specific game
     updated            Show the 10 mods most recently updated for a game
     validate           Test your Nexus API key; whoami
+    wastebinned        Find mods for this game that were wastebinned by their authors
 ```
 
 My workflow was to run `modcache tracked` to get my full tracked modlist into cache, then run `modcache populate skyrimspecialedition 90` every hour until I had the 2K+ mods I track stored locally.
 
-`--refresh` uses the weak etag the Nexus returns to see if their data has changed. This dings you an API request even if you get a 304 back, which is disappointing.
+`--refresh` uses the weak etag the Nexus returns to see if their data has changed. This dings you an API request even if you get a 304 back :(.
 
 ## References
 

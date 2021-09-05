@@ -107,3 +107,14 @@ where
 pub struct ModInfoList {
     pub mods: Vec<ModInfoFull>,
 }
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct EndorseResponse {
+    message: String,
+    pub status: EndorsementStatus,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct TrackingResponse {
+    pub message: String,
+}

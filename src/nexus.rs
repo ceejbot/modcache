@@ -137,7 +137,7 @@ impl NexusClient {
         let response = match builder.call() {
             Ok(v) => v,
             Err(ureq::Error::Status(code, response)) => {
-                // max request rate is 30/sec, which tbh we might hit.
+                // max request rate is 30/sec, which tbh can exceed instantly.
                 if code == 429 {
                     warn!("The Nexus has rate-limited you!");
                 } else {
@@ -215,11 +215,11 @@ impl NexusClient {
     // Shut up. I'm repeating myself to find patterns, dammit.
     // Here I assume I'm never going to care about what the Nexus responds with,
     // other than the status code.
-    pub fn post(
+    pub fn post<T: for<'de> Deserialize<'de>>(
         &mut self,
         uri: &str,
         body: &[(&str, &str)],
-    ) -> Result<serde_json::Value, anyhow::Error> {
+    ) -> Result<T, anyhow::Error> {
         let response = match self
             .agent
             .post(uri)
@@ -246,7 +246,7 @@ impl NexusClient {
             error!("problem parsing headers: {:?}", e)
         }
         info!("post got status={}", response.status());
-        let payload = response.into_json::<serde_json::Value>();
+        let payload = response.into_json::<T>();
         match payload {
             Err(e) => {
                 error!("problem deserializing: {:?}", e);
@@ -257,11 +257,11 @@ impl NexusClient {
     }
 
     // repeat previous comment
-    pub fn delete(
+    pub fn delete<T: for<'de> Deserialize<'de>>(
         &mut self,
         uri: &str,
         body: &[(&str, &str)],
-    ) -> Result<serde_json::Value, anyhow::Error> {
+    ) -> Result<T, anyhow::Error> {
         let response = match self
             .agent
             .delete(uri)
@@ -289,7 +289,7 @@ impl NexusClient {
             error!("problem parsing headers: {:?}", e)
         }
         info!("del got status={}", response.status());
-        let payload = response.into_json::<serde_json::Value>();
+        let payload = response.into_json::<T>();
         match payload {
             Err(e) => {
                 error!("problem deserializing: {:?}", e);
@@ -299,7 +299,6 @@ impl NexusClient {
         }
     }
 
-    // Boy, this sure looks like predictable code.
     /// Validate your Nexus API token.
     pub fn validate(&mut self) -> anyhow::Result<AuthenticatedUser> {
         let uri = format!("{}/v1/users/validate.json", NEXUS_BASE);
@@ -368,7 +367,7 @@ impl NexusClient {
     }
 
     /// Begin tracking a specific mod, identified by game domain name and id.
-    pub fn track(&mut self, game: &str, mod_id: u32) -> anyhow::Result<serde_json::Value> {
+    pub fn track(&mut self, game: &str, mod_id: u32) -> anyhow::Result<TrackingResponse> {
         let uri = format!(
             "{}/v1/user/tracked_mods.json?domain_name={}",
             NEXUS_BASE, game
@@ -377,7 +376,7 @@ impl NexusClient {
     }
 
     /// Stop tracking a specific mod, identified by game domain name and id.
-    pub fn untrack(&mut self, game: &str, mod_id: u32) -> anyhow::Result<serde_json::Value> {
+    pub fn untrack(&mut self, game: &str, mod_id: u32) -> anyhow::Result<TrackingResponse> {
         let uri = format!(
             "{}/v1/user/tracked_mods.json?domain_name={}",
             NEXUS_BASE, game
@@ -392,6 +391,24 @@ impl NexusClient {
             return Some(EndorsementList { mods, etag });
         }
         None
+    }
+
+    /// Endorse a mod.
+    pub fn endorse(&mut self, game: &str, mod_id: u32) -> anyhow::Result<EndorseResponse> {
+        let uri = format!(
+            "{}/v1/games/{}/mods/{}/endorse.json",
+            NEXUS_BASE, game, mod_id
+        );
+        self.post::<EndorseResponse>(&uri, &[("version", "*")])
+    }
+
+    /// Abstain from endorsing a mod.
+    pub fn abstain(&mut self, game: &str, mod_id: u32) -> anyhow::Result<EndorseResponse> {
+        let uri = format!(
+            "{}/v1/games/{}/mods/{}/abstain.json",
+            NEXUS_BASE, game, mod_id
+        );
+        self.post::<EndorseResponse>(&uri, &[("version", "*")])
     }
 
     /// Get a list of trending mods for a specific game. This list is capped at 10.

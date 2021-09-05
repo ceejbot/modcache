@@ -106,8 +106,15 @@ impl GameMetadata {
     /// Display full information about a game, its categories, and any mods in cache for it.
     pub fn emit_fancy(&self, _db: &kv::Store) {
         println!("{}", self.name().yellow().bold());
-        println!("{} mods by {} authors", self.mods.to_formatted_string(&Locale::en).bold(), self.authors.bold());
-        println!("{} downloads", self.downloads.to_formatted_string(&Locale::en).bold());
+        println!(
+            "{} mods by {} authors",
+            self.mods.to_formatted_string(&Locale::en).bold(),
+            self.authors.bold()
+        );
+        println!(
+            "{} downloads",
+            self.downloads.to_formatted_string(&Locale::en).bold()
+        );
         println!();
 
         let cats: Vec<String> = self
