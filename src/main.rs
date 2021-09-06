@@ -48,33 +48,35 @@ pub struct Flags {
 enum Command {
     /// Populate the local cache with mods tracked for a specific game.
     Populate {
-        /// The game to populate.
-        #[structopt(default_value = "skyrimspecialedition")]
-        game: String,
         /// The number of API calls allowed before stopping.
         #[structopt(default_value = "50")]
         limit: u16,
+        /// The game to populate.
+        #[structopt(default_value = "skyrimspecialedition")]
+        game: String,
     },
     /// Test your Nexus API key; whoami
     Validate,
-    /// Fetch your list of tracked mods
+    /// Fetch your list of tracked mods and show a by-game summary.
     Tracked {
-        #[structopt(default_value = "all")]
-        game: String,
+        /// Optionally, display a detailed list of tracked mods for a specific game.
+        game: Option<String>,
     },
     /// Track a specific mod
     Track {
-        /// Which game the mod belongs to; Nexus short name
-        game: String,
         /// The id of the mod to track
         mod_id: u32,
+        /// Which game the mods belong to; Nexus short name
+        #[structopt(default_value="skyrimspecialedition")]
+        game: String,
     },
     /// Stop tracking a mod or list of mods, by id
     Untrack {
-        /// Which game the mods belong to; Nexus short name
-        game: String,
         /// The ids of the mods to stop tracking
         ids: Vec<u32>,
+        /// Which game the mods belong to; Nexus short name
+        #[structopt(default_value="skyrimspecialedition")]
+        game: String,
     },
     /// Stop tracking all removed mods for a specific game
     UntrackRemoved {
@@ -83,17 +85,19 @@ enum Command {
     },
     /// Get changelogs for a specific mod.
     Changelogs {
-        /// Which game the mod belongs to; Nexus short name
-        game: String,
         /// The id of the mod to fetch changelogs for
         mod_id: u32,
+        /// Which game the mods belong to; Nexus short name
+        #[structopt(default_value="skyrimspecialedition")]
+        game: String,
     },
     /// Get the list of files for a specific mod. Not very useful yet.
     Files {
-        /// Which game the mod belongs to; Nexus short name
-        game: String,
         /// The id of the mod to fetch files for
         mod_id: u32,
+        /// Which game the mods belong to; Nexus short name
+        #[structopt(default_value="skyrimspecialedition")]
+        game: String,
     },
     /// Fetch the list of mods you have endorsed
     Endorsements {
@@ -102,17 +106,19 @@ enum Command {
     },
     /// Endorse a mod or list of mods
     Endorse {
-        /// Which game the mods belong to; Nexus short name
-        game: String,
         /// The ids of the mods to endorse
         ids: Vec<u32>,
+        /// Which game the mods belong to; Nexus short name
+        #[structopt(default_value="skyrimspecialedition")]
+        game: String,
     },
     /// Abstain from endorsing a mod.
     Abstain {
-        /// Which game the mod belongs to; Nexus short name
-        game: String,
         /// The id of the mod to refuse to endorse
         mod_id: u32,
+        /// Which game the mods belong to; Nexus short name
+        #[structopt(default_value="skyrimspecialedition")]
+        game: String,
     },
     /// Get Nexus metadata about a game by slug
     Game {
@@ -175,10 +181,11 @@ enum Command {
     },
     /// Display detailed info for a single mod
     Mod {
-        /// Which game the mod is for; Nexus short name
-        game: String,
         /// The id of the mod to show
         mod_id: u32,
+        /// Which game the mods belong to; Nexus short name
+        #[structopt(default_value="skyrimspecialedition")]
+        game: String,
     },
 }
 
@@ -576,9 +583,10 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                 if flags.json {
                     let pretty = serde_json::to_string_pretty(&tracked)?;
                     println!("{}", pretty);
-                } else if game == "all" {
+                } else if game.is_none() {
                     println!("{}", tracked);
                 } else {
+                    let game = game.unwrap();
                     let filtered = tracked.by_game(&game);
                     if filtered.is_empty() {
                         println!("You aren't tracking any mods for {}", game.yellow().bold());

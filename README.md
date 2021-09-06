@@ -39,7 +39,7 @@ SUBCOMMANDS:
     removed            Find mods for this game that are removed, probably so you can untrack them
     search             Find mods that mention this string in their names or text summaries
     track              Track a specific mod
-    tracked            Fetch your list of tracked mods
+    tracked            Fetch your list of tracked mods and show a by-game summary
     trending           Show the 10 top all-time trending mods for a game
     untrack            Stop tracking a mod or list of mods, by id
     untrack-removed    Stop tracking all removed mods for a specific game
@@ -48,7 +48,7 @@ SUBCOMMANDS:
     wastebinned        Find mods for this game that were wastebinned by their authors
 ```
 
-My workflow was to run `modcache tracked` to get my full tracked modlist into cache, then run `modcache populate skyrimspecialedition 90` every hour until I had the 2K+ mods I track stored locally.
+My workflow was to run `modcache tracked` to get my full tracked modlist into cache, then run `modcache populate 90 skyrimspecialedition` every hour until I had the 2K+ mods I track stored locally.
 
 `--refresh` uses the weak etag the Nexus returns to see if their data has changed. This dings you an API request even if you get a 304 back :(.
 
