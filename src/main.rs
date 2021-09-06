@@ -67,7 +67,7 @@ enum Command {
         /// The id of the mod to track
         mod_id: u32,
         /// Which game the mods belong to; Nexus short name
-        #[structopt(default_value="skyrimspecialedition")]
+        #[structopt(default_value = "skyrimspecialedition")]
         game: String,
     },
     /// Stop tracking a mod or list of mods, by id
@@ -75,7 +75,7 @@ enum Command {
         /// The ids of the mods to stop tracking
         ids: Vec<u32>,
         /// Which game the mods belong to; Nexus short name
-        #[structopt(default_value="skyrimspecialedition")]
+        #[structopt(default_value = "skyrimspecialedition")]
         game: String,
     },
     /// Stop tracking all removed mods for a specific game
@@ -88,7 +88,7 @@ enum Command {
         /// The id of the mod to fetch changelogs for
         mod_id: u32,
         /// Which game the mods belong to; Nexus short name
-        #[structopt(default_value="skyrimspecialedition")]
+        #[structopt(default_value = "skyrimspecialedition")]
         game: String,
     },
     /// Get the list of files for a specific mod. Not very useful yet.
@@ -96,7 +96,7 @@ enum Command {
         /// The id of the mod to fetch files for
         mod_id: u32,
         /// Which game the mods belong to; Nexus short name
-        #[structopt(default_value="skyrimspecialedition")]
+        #[structopt(default_value = "skyrimspecialedition")]
         game: String,
     },
     /// Fetch the list of mods you have endorsed
@@ -109,7 +109,7 @@ enum Command {
         /// The ids of the mods to endorse
         ids: Vec<u32>,
         /// Which game the mods belong to; Nexus short name
-        #[structopt(default_value="skyrimspecialedition")]
+        #[structopt(default_value = "skyrimspecialedition")]
         game: String,
     },
     /// Abstain from endorsing a mod.
@@ -117,7 +117,7 @@ enum Command {
         /// The id of the mod to refuse to endorse
         mod_id: u32,
         /// Which game the mods belong to; Nexus short name
-        #[structopt(default_value="skyrimspecialedition")]
+        #[structopt(default_value = "skyrimspecialedition")]
         game: String,
     },
     /// Get Nexus metadata about a game by slug
@@ -184,7 +184,7 @@ enum Command {
         /// The id of the mod to show
         mod_id: u32,
         /// Which game the mods belong to; Nexus short name
-        #[structopt(default_value="skyrimspecialedition")]
+        #[structopt(default_value = "skyrimspecialedition")]
         game: String,
     },
 }

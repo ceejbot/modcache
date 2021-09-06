@@ -5,25 +5,25 @@ use crate::Cacheable;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct FileInfo {
-    id: Vec<usize>,
-    uuid: Option<String>,
-    file_id: usize,
-    name: String,
-    version: String,
     category_id: u32,
     category_name: Option<String>,
-    is_primary: bool,
-    size: u64,
-    file_name: String,
-    uploaded_timestamp: usize,
-    uploaded_time: String,
-    mod_version: String,
-    external_virus_scan_url: String,
-    description: String,
-    size_kb: usize,
-    size_in_bytes: u64,
-    changelog_html: String,
+    changelog_html: Option<String>,
     content_preview_link: String,
+    description: String,
+    external_virus_scan_url: String,
+    file_id: usize,
+    file_name: String,
+    id: Vec<usize>,
+    is_primary: bool,
+    mod_version: String,
+    name: String,
+    size_in_bytes: u64,
+    size_kb: usize,
+    size: u64,
+    uploaded_time: String,
+    uploaded_timestamp: usize,
+    uuid: Option<String>,
+    version: String,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -89,8 +89,10 @@ impl Cacheable<(&str, u32)> for Files {
     fn local(key: (&str, u32), db: &kv::Store) -> Option<Box<Self>> {
         let compound = Files::key(key);
         let bucket = super::bucket::<Self, (&str, u32)>(db).unwrap();
-        let found = bucket.get(&*compound).ok()?;
-        found.map(Box::new)
+        match bucket.get(&*compound) {
+            Ok(found) => found.map(Box::new),
+            Err(_) => None,
+        }
     }
 
     fn fetch(key: (&str, u32), nexus: &mut NexusClient, etag: Option<String>) -> Option<Box<Self>> {

@@ -1,5 +1,4 @@
 use chrono::{DateTime, Utc};
-use log::{error, info, warn};
 use owo_colors::OwoColorize;
 use serde::Deserialize;
 
@@ -66,15 +65,17 @@ impl NexusClient {
 
     fn requests_allowed(&self) -> bool {
         if self.limits.hourly_remaining < 1 {
-            error!(
+            log::error!(
                 "Past hourly api call limit of {}! Wait until {}",
-                self.limits.hourly_limit, self.limits.hourly_reset
+                self.limits.hourly_limit,
+                self.limits.hourly_reset
             );
             false
         } else if self.limits.daily_remaining < 1 {
-            error!(
+            log::error!(
                 "Past daily api call limit of {}! Wait until {}",
-                self.limits.daily_limit, self.limits.daily_reset
+                self.limits.daily_limit,
+                self.limits.daily_reset
             );
             false
         } else {
@@ -115,43 +116,54 @@ impl NexusClient {
         Ok(etag)
     }
 
-    fn conditional_get<T: for<'de> Deserialize<'de>>(
-        &mut self,
-        uri: &str,
-        etag: Option<String>,
-    ) -> Result<(Option<T>, String), anyhow::Error> {
+    /// Handle rate-limiting
+    fn request_inner(&mut self, request: ureq::Request) -> anyhow::Result<ureq::Response> {
         if !self.requests_allowed() {
             anyhow::bail!("Rate-limited");
         }
 
-        let mut builder = self
+        let response = match request.call() {
+            Ok(v) => v,
+            Err(ureq::Error::Status(code, response)) => {
+                // max request rate is 30/sec, which tbh can exceed instantly.
+                if code == 429 {
+                    log::warn!("The Nexus has rate-limited you!");
+                } else {
+                    log::error!("The Nexus responded with {}", code.red());
+                    log::error!("{:?}", response.into_string());
+                }
+                anyhow::bail!("well this is another fine mess TODO better reporting");
+            }
+            Err(e) => {
+                log::error!("Transport layer error: {:?}", e);
+                anyhow::bail!(e);
+            }
+        };
+
+        Ok(response)
+    }
+
+    /// Make a get request to the nexus, with optional etag.
+    fn do_get(&mut self, uri: &str, etag: Option<String>) -> anyhow::Result<ureq::Response> {
+        let mut request = self
             .agent
             .get(uri)
             .set("apikey", &self.apikey)
             .set("user-agent", "modcache: github.com/ceejbot/modcache");
 
         if let Some(t) = etag {
-            builder = builder.set("if-none-match", &t);
+            request = request.set("if-none-match", &t);
         }
 
-        let response = match builder.call() {
-            Ok(v) => v,
-            Err(ureq::Error::Status(code, response)) => {
-                // max request rate is 30/sec, which tbh can exceed instantly.
-                if code == 429 {
-                    warn!("The Nexus has rate-limited you!");
-                } else {
-                    error!("The Nexus responded with {}", code.red());
-                    error!("{:?}", response.into_string());
-                }
-                anyhow::bail!("well this is another fine mess TODO better reporting");
-            }
-            Err(e) => {
-                error!("Transport layer error: {:?}", e);
-                anyhow::bail!(e);
-            }
-        };
+        self.request_inner(request)
+    }
 
+    fn conditional_get<T: for<'de> Deserialize<'de>>(
+        &mut self,
+        uri: &str,
+        etag: Option<String>,
+    ) -> Result<(Option<T>, String), anyhow::Error> {
+        let response = self.do_get(uri, etag)?;
         let etag = self.handle_headers(&response)?;
 
         let status = response.status();
@@ -162,50 +174,24 @@ impl NexusClient {
         match response.into_json::<T>() {
             Ok(v) => Ok((Some(v), etag)),
             Err(e) => {
-                error!("problem deserializing: {:?}", e);
+                log::error!("couldn't deserialize nexus data: {:?}", e);
+                log::error!("{}", uri);
                 Err(anyhow::Error::new(e))
             }
         }
     }
 
-    // Shut up. I'm repeating myself to find patterns, dammit.
+    /// Unconditional nexus get; does not consider etags.
+    // closer to reasonable...
     fn get<T: for<'de> Deserialize<'de>>(&mut self, uri: &str) -> Result<T, anyhow::Error> {
-        if !self.requests_allowed() {
-            anyhow::bail!("Rate-limited");
-        }
-
-        let response = match self
-            .agent
-            .get(uri)
-            .set("apikey", &self.apikey)
-            .set("user-agent", "modcache: github.com/ceejbot/modcache")
-            .call()
-        {
-            Ok(v) => v,
-            Err(ureq::Error::Status(code, response)) => {
-                if code == 429 {
-                    warn!("The Nexus has rate-limited you!");
-                } else {
-                    error!("The Nexus responded with {}", code.red());
-                    error!("{:?}", response.into_string());
-                }
-                anyhow::bail!("well this is another fine mess TODO better reporting");
-            }
-            Err(e) => {
-                error!("Transport layer error: {:?}", e);
-                anyhow::bail!(e);
-            }
-        };
-
-        // TODO snag the etag header too
-        if let Err(e) = self.handle_headers(&response) {
-            error!("problem parsing headers: {:?}", e)
-        }
+        let response = self.do_get(uri, None)?;
+        let _etag = self.handle_headers(&response)?;
 
         let payload = response.into_json::<T>();
         match payload {
             Err(e) => {
-                error!("problem deserializing: {:?}", e);
+                log::error!("couldn't deserialize nexus data: {:?}", e);
+                log::error!("{}", uri);
                 Err(anyhow::Error::new(e))
             }
             Ok(v) => Ok(v),
@@ -213,8 +199,8 @@ impl NexusClient {
     }
 
     // Shut up. I'm repeating myself to find patterns, dammit.
-    // Here I assume I'm never going to care about what the Nexus responds with,
-    // other than the status code.
+    /// Post data to the nexus, deserializing the response into the requested type.
+    /// Handles rate-limiting headers.
     pub fn post<T: for<'de> Deserialize<'de>>(
         &mut self,
         uri: &str,
@@ -230,26 +216,26 @@ impl NexusClient {
             Ok(v) => v,
             Err(ureq::Error::Status(code, v)) => {
                 if code == 429 {
-                    warn!("The Nexus has rate-limited you!");
+                    log::warn!("The Nexus has rate-limited you!");
                 } else {
-                    error!("The Nexus responded with {}", code.red());
-                    error!("{:?}", v);
+                    log::error!("The Nexus responded with {}", code.red());
+                    log::error!("{:?}", v);
                 }
                 v
             }
             Err(e) => {
-                error!("Transport layer error: {:?}", e);
+                log::error!("Transport layer error: {:?}", e);
                 anyhow::bail!(e);
             }
         };
         if let Err(e) = self.handle_headers(&response) {
-            error!("problem parsing headers: {:?}", e)
+            log::error!("problem parsing headers: {:?}", e)
         }
-        info!("post got status={}", response.status());
+        log::debug!("post got status={}", response.status());
         let payload = response.into_json::<T>();
         match payload {
             Err(e) => {
-                error!("problem deserializing: {:?}", e);
+                log::error!("problem deserializing: {:?}", e);
                 Err(anyhow::Error::new(e))
             }
             Ok(v) => Ok(v),
@@ -272,27 +258,27 @@ impl NexusClient {
             Ok(v) => v,
             Err(ureq::Error::Status(code, v)) => {
                 if code == 429 {
-                    warn!("The Nexus has rate-limited you!");
+                    log::warn!("The Nexus has rate-limited you!");
                 } else {
-                    error!("The Nexus responded with {}", code.red());
-                    error!("{:?}", v);
+                    log::error!("The Nexus responded with {}", code.red());
+                    log::error!("{:?}", v);
                 }
                 v
             }
             Err(e) => {
-                error!("Transport layer error: {:?}", e);
+                log::error!("Transport layer error: {:?}", e);
                 anyhow::bail!(e);
             }
         };
         // We're calling this for the side effects, I'm afraid. This needs refactoring.
         if let Err(e) = self.handle_headers(&response) {
-            error!("problem parsing headers: {:?}", e)
+            log::error!("problem parsing headers: {:?}", e)
         }
-        info!("del got status={}", response.status());
+        log::info!("del got status={}", response.status());
         let payload = response.into_json::<T>();
         match payload {
             Err(e) => {
-                error!("problem deserializing: {:?}", e);
+                log::error!("problem deserializing: {:?}", e);
                 Err(anyhow::Error::new(e))
             }
             Ok(v) => Ok(v),
