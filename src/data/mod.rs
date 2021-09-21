@@ -1,6 +1,8 @@
+//! Nexus mod data structs and trait implementations, plus caching layer.
+//! More complex structures are broken out into separate files.
+
 use std::fmt::Debug;
 
-use log::info;
 use serde::{Deserialize, Serialize};
 
 pub mod changelogs;
@@ -21,9 +23,6 @@ pub use user::*;
 
 use crate::nexus::NexusClient;
 
-// Nexus mod data structs and trait implementations, plus caching layer.
-// More complex structures are broken out into separate files.
-
 /// Get the item, looking in local cache first then calling to the Nexus if not found.
 /// Set refresh to true if you want to check the Nexus even if you have a cache hit.
 pub fn get<T, K: Debug + Clone>(
@@ -38,26 +37,26 @@ where
     if let Some(found) = T::local(key.clone(), db) {
         if refresh {
             if let Some(fetched) = T::fetch(key, nexus, Some(found.etag().to_string())) {
-                println!("    ↪ refreshed nexus data");
+                log::info!("    ↪ refreshed nexus data");
                 if fetched.store(db).is_ok() {
-                    info!("    ✓ cached nexus data");
+                    log::info!("    ✓ cached nexus data");
                 }
                 Some(fetched)
             } else {
-                info!("    ↩ no update; responding with cached");
+                log::info!("    ↩ no update; responding with cached");
                 Some(found)
             }
         } else {
             Some(found)
         }
     } else if let Some(fetched) = T::fetch(key, nexus, None) {
-        println!("    ﹢ first fetch of nexus data");
+        log::info!("    ﹢ first fetch of nexus data");
         if fetched.store(db).is_ok() {
-            info!("    ✓ cached new nexus data");
+            log::info!("    ✓ cached new nexus data");
         }
         Some(fetched)
     } else {
-        info!("    ␀nexus gave us nothing");
+        log::info!("    ␀nexus gave us nothing");
         None
     }
 }
@@ -69,7 +68,7 @@ where
 {
     match db.bucket::<&str, T>(Some(T::bucket_name())) {
         Err(e) => {
-            info!("Can't open bucket {}! {:?}", T::bucket_name(), e);
+            log::info!("Can't open bucket {}! {:?}", T::bucket_name(), e);
             None
         }
         Ok(v) => Some(v),

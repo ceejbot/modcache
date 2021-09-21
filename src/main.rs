@@ -49,7 +49,7 @@ enum Command {
     /// Populate the local cache with mods tracked for a specific game.
     Populate {
         /// The number of API calls allowed before stopping.
-        #[structopt(default_value = "50")]
+        #[structopt(short, long, default_value = "50")]
         limit: u16,
         /// The game to populate.
         #[structopt(default_value = "skyrimspecialedition")]
