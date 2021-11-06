@@ -52,6 +52,8 @@ My workflow was to run `modcache tracked` to get my full tracked modlist into ca
 
 `--refresh` uses the weak etag the Nexus returns to see if their data has changed. This dings you an API request even if you get a 304 back :(.
 
+If you have [just](https://github.com/casey/just) installed, the justfile provides some conveniences for running the tool
+
 ## References
 
 [The Nexus API](https://app.swaggerhub.com/apis-docs/NexusMods/nexus-mods_public_api_params_in_form_data/1.0#/)
