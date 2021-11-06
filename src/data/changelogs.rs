@@ -1,5 +1,6 @@
 // All structs and trait impls supporting the full mod info response from the Nexus.
 
+use kv::{Codec, Json};
 use serde::{Deserialize, Serialize};
 
 use std::collections::HashMap;
@@ -70,8 +71,8 @@ impl Cacheable<(&str, u32)> for Changelogs {
     fn local(key: (&str, u32), db: &kv::Store) -> Option<Box<Self>> {
         let compound = Changelogs::key(key);
         let bucket = super::bucket::<Self, (&str, u32)>(db).unwrap();
-        let found = bucket.get(&*compound).ok()?;
-        found.map(Box::new)
+        let found: Option<Json<Self>> = bucket.get(&*compound).ok()?;
+        found.map(|x| Box::new(x.into_inner()))
     }
 
     fn fetch(key: (&str, u32), nexus: &mut NexusClient, etag: Option<String>) -> Option<Box<Self>> {
@@ -86,23 +87,10 @@ impl Cacheable<(&str, u32)> for Changelogs {
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
         let bucket = super::bucket::<Self, (&str, u32)>(db).unwrap();
         let compound = Changelogs::key((&self.domain_name, self.mod_id));
-        if bucket.set(&*compound, self.clone()).is_ok() {
+        if bucket.set(&*compound, Json(self.clone())).is_ok() {
             Ok(1)
         } else {
             Ok(0)
         }
-    }
-}
-
-// TODO write a macro for this
-impl kv::Value for Changelogs {
-    fn to_raw_value(&self) -> Result<kv::Raw, kv::Error> {
-        let x = serde_json::to_vec(&self)?;
-        Ok(x.into())
-    }
-
-    fn from_raw_value(r: kv::Raw) -> Result<Self, kv::Error> {
-        let x: Self = serde_json::from_slice(&r)?;
-        Ok(x)
     }
 }

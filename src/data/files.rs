@@ -1,3 +1,4 @@
+use kv::{Codec, Json};
 use serde::{Deserialize, Serialize};
 
 use crate::nexus::NexusClient;
@@ -89,10 +90,8 @@ impl Cacheable<(&str, u32)> for Files {
     fn local(key: (&str, u32), db: &kv::Store) -> Option<Box<Self>> {
         let compound = Files::key(key);
         let bucket = super::bucket::<Self, (&str, u32)>(db).unwrap();
-        match bucket.get(&*compound) {
-            Ok(found) => found.map(Box::new),
-            Err(_) => None,
-        }
+        let found: Option<Json<Self>> = bucket.get(&*compound).ok()?;
+        found.map(|x| Box::new(x.into_inner()))
     }
 
     fn fetch(key: (&str, u32), nexus: &mut NexusClient, etag: Option<String>) -> Option<Box<Self>> {
@@ -107,23 +106,10 @@ impl Cacheable<(&str, u32)> for Files {
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
         let bucket = super::bucket::<Self, (&str, u32)>(db).unwrap();
         let compound = Files::key((&self.domain_name, self.mod_id));
-        if bucket.set(&*compound, self.clone()).is_ok() {
+        if bucket.set(&*compound, Json(self.clone())).is_ok() {
             Ok(1)
         } else {
             Ok(0)
         }
-    }
-}
-
-// TODO write a macro for this
-impl kv::Value for Files {
-    fn to_raw_value(&self) -> Result<kv::Raw, kv::Error> {
-        let x = serde_json::to_vec(&self)?;
-        Ok(x.into())
-    }
-
-    fn from_raw_value(r: kv::Raw) -> Result<Self, kv::Error> {
-        let x: Self = serde_json::from_slice(&r)?;
-        Ok(x)
     }
 }

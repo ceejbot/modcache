@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use kv::{Codec, Json};
 use num_format::{Locale, ToFormattedString};
 use owo_colors::OwoColorize;
 use regex::RegexBuilder;
@@ -225,8 +226,8 @@ impl Cacheable<&str> for GameMetadata {
 
     fn local(key: &str, db: &kv::Store) -> Option<Box<Self>> {
         let bucket = super::bucket::<Self, &str>(db).unwrap();
-        let found = bucket.get(key).ok()?;
-        found.map(Box::new)
+        let found: Option<Json<Self>> = bucket.get(key).ok()?;
+        found.map(|x| Box::new(x.into_inner()))
     }
 
     fn fetch(key: &str, nexus: &mut NexusClient, etag: Option<String>) -> Option<Box<Self>> {
@@ -235,23 +236,10 @@ impl Cacheable<&str> for GameMetadata {
 
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
         let bucket = super::bucket::<Self, &str>(db).unwrap();
-        if bucket.set(&*self.domain_name, self.clone()).is_ok() {
+        if bucket.set(&*self.domain_name, Json(self.clone())).is_ok() {
             Ok(1)
         } else {
             Ok(0)
         }
-    }
-}
-
-// TODO really needs to be a macro or something
-impl kv::Value for GameMetadata {
-    fn to_raw_value(&self) -> Result<kv::Raw, kv::Error> {
-        let x = serde_json::to_vec(&self)?;
-        Ok(x.into())
-    }
-
-    fn from_raw_value(r: kv::Raw) -> Result<Self, kv::Error> {
-        let x: Self = serde_json::from_slice(&r)?;
-        Ok(x)
     }
 }

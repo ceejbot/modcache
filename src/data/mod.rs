@@ -3,6 +3,7 @@
 
 use std::fmt::Debug;
 
+use kv::Json;
 use serde::{Deserialize, Serialize};
 
 pub mod changelogs;
@@ -62,11 +63,13 @@ where
 }
 
 /// Given a bucket name and appropriate types, return a kv bucket for the data.
-pub fn bucket<T, K: Debug + Clone>(db: &kv::Store) -> Option<kv::Bucket<'static, &'static str, T>>
+pub fn bucket<T, K: Debug + Clone>(
+    db: &kv::Store,
+) -> Option<kv::Bucket<'static, &'static str, Json<T>>>
 where
     T: Cacheable<K>,
 {
-    match db.bucket::<&str, T>(Some(T::bucket_name())) {
+    match db.bucket::<&str, Json<T>>(Some(T::bucket_name())) {
         Err(e) => {
             log::info!("Can't open bucket {}! {:?}", T::bucket_name(), e);
             None
@@ -78,7 +81,7 @@ where
 /// The main trait for objects we store.
 pub trait Cacheable<K>
 where
-    Self: kv::Value,
+    Self: for<'de> serde::Deserialize<'de> + serde::Serialize,
 {
     /// Get the name of the bucket where these items are stored.
     fn bucket_name() -> &'static str;

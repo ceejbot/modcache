@@ -1,3 +1,4 @@
+use kv::{Codec, Json};
 use owo_colors::OwoColorize;
 use serde::{Deserialize, Serialize};
 
@@ -137,11 +138,8 @@ impl Cacheable<()> for EndorsementList {
 
     fn local(_key: (), db: &kv::Store) -> Option<Box<Self>> {
         let bucket = super::bucket::<Self, ()>(db).unwrap();
-        let found = bucket.get("endorsements").ok()?;
-        if let Some(modref_list) = found {
-            return Some(Box::new(modref_list));
-        }
-        None
+        let found: Option<Json<Self>> = bucket.get("endorsements").ok()?;
+        found.map(|x| Box::new(x.into_inner()))
     }
 
     fn fetch(
@@ -154,23 +152,10 @@ impl Cacheable<()> for EndorsementList {
 
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
         let bucket = super::bucket::<Self, ()>(db).unwrap();
-        if bucket.set("endorsements", self.clone()).is_ok() {
+        if bucket.set("endorsements", Json(self.clone())).is_ok() {
             Ok(1)
         } else {
             Ok(0)
         }
-    }
-}
-
-// this has to be auto-generatable with a macro
-impl kv::Value for EndorsementList {
-    fn to_raw_value(&self) -> Result<kv::Raw, kv::Error> {
-        let x = serde_json::to_vec(&self)?;
-        Ok(x.into())
-    }
-
-    fn from_raw_value(r: kv::Raw) -> Result<Self, kv::Error> {
-        let x: Self = serde_json::from_slice(&r)?;
-        Ok(x)
     }
 }
