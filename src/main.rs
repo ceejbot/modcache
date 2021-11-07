@@ -70,13 +70,13 @@ enum Command {
         #[structopt(default_value = "skyrimspecialedition")]
         game: String,
     },
-    /// Stop tracking a mod or list of mods, by id
+    /// Stop tracking a mod or list of mods, by id.
     Untrack {
+        /// Which game the mods belong to; Nexus short name
+        #[structopt(short, long, default_value = "skyrimspecialedition")]
+        game: String,
         /// The ids of the mods to stop tracking
         ids: Vec<u32>,
-        /// Which game the mods belong to; Nexus short name
-        #[structopt(default_value = "skyrimspecialedition")]
-        game: String,
     },
     /// Stop tracking all removed mods for a specific game
     UntrackRemoved {
@@ -239,7 +239,7 @@ fn show_endorsements(
     store: &kv::Store,
     client: &mut nexus::NexusClient,
 ) {
-    let game_meta = GameMetadata::get(game, false, store, client).unwrap();
+    let game_meta = GameMetadata::get(&game.to_string(), false, store, client).unwrap();
     println!(
         "\n{} opinions for {}",
         pluralize_mod(modlist.len()),
@@ -259,8 +259,8 @@ fn show_endorsements(
         let mut table = Table::new();
         table.set_format(*prettytable::format::consts::FORMAT_CLEAN);
         list.iter().for_each(|opinion| {
-            if let Some(mod_info) = ModInfoFull::get((game, opinion.mod_id()), false, store, client)
-            {
+            let key = CompoundKey::new(game.to_string(), opinion.mod_id());
+            if let Some(mod_info) = ModInfoFull::get(&key, false, store, client) {
                 table.add_row(row![
                     format!("{}", opinion.status()),
                     format!(
@@ -489,9 +489,8 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
             }
         }
         Command::Mod { game, mod_id } => {
-            if let Some(modinfo) =
-                ModInfoFull::get((&game, mod_id), flags.refresh, &store, &mut nexus)
-            {
+            let key = CompoundKey::new(game, mod_id);
+            if let Some(modinfo) = ModInfoFull::get(&key, flags.refresh, &store, &mut nexus) {
                 if flags.json {
                     let pretty = serde_json::to_string_pretty(&modinfo)?;
                     println!("{}", pretty);
@@ -507,7 +506,7 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                 return Ok(());
             }
 
-            let tracked = Tracked::get((), flags.refresh, &store, &mut nexus);
+            let tracked = Tracked::get(&Tracked::listkey(), flags.refresh, &store, &mut nexus);
             if tracked.is_none() {
                 anyhow::bail!("Unable to fetch any tracked mods.");
             }
@@ -530,12 +529,11 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
 
             while item.is_some() {
                 let modinfo = item.unwrap();
-                let key = (modinfo.domain_name.as_ref(), modinfo.mod_id);
-
+                let key = CompoundKey::new(modinfo.domain_name.clone(), modinfo.mod_id);
                 // Find the next uncached mod.
-                let maybe_mod = if ModInfoFull::local(key, &store).is_some() {
+                let maybe_mod = if data::local::<ModInfoFull, CompoundKey>(&key, &store).is_some() {
                     None
-                } else if let Some(m) = ModInfoFull::fetch(key, &mut nexus, None) {
+                } else if let Some(m) = ModInfoFull::fetch(&key, &mut nexus, None) {
                     m.store(&store)?;
                     fetches += 1;
                     Some(m)
@@ -560,7 +558,7 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
             }
         }
         Command::Validate => {
-            if let Some(user) = AuthenticatedUser::fetch("ignored", &mut nexus, None) {
+            if let Some(user) = AuthenticatedUser::fetch(&"ignored", &mut nexus, None) {
                 if flags.json {
                     let pretty = serde_json::to_string_pretty(&user)?;
                     println!("{}", pretty);
@@ -577,7 +575,7 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
             }
         }
         Command::Tracked { game } => {
-            let maybe = Tracked::get((), flags.refresh, &store, &mut nexus);
+            let maybe = Tracked::get(&Tracked::listkey(), flags.refresh, &store, &mut nexus);
 
             if let Some(tracked) = maybe {
                 if flags.json {
@@ -601,7 +599,10 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                         let mut moderated: Vec<ModInfoFull> = Vec::new();
                         let mut cat_map: HashMap<u16, Vec<ModInfoFull>> = HashMap::new();
                         filtered.iter().for_each(|m| {
-                            if let Some(mod_info) = ModInfoFull::local((&game, m.mod_id), &store) {
+                            let key = CompoundKey::new(game.clone(), m.mod_id);
+                            if let Some(mod_info) =
+                                data::local::<ModInfoFull, CompoundKey>(&key, &store)
+                            {
                                 let bucket = cat_map
                                     .entry(mod_info.category_id())
                                     .or_insert_with(Vec::new);
@@ -684,7 +685,7 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
         }
         Command::UntrackRemoved { game } => {
             if let Some(metadata) = GameMetadata::get(&game, flags.refresh, &store, &mut nexus) {
-                let maybe = Tracked::get((), flags.refresh, &store, &mut nexus);
+                let maybe = Tracked::get(&Tracked::listkey(), flags.refresh, &store, &mut nexus);
                 if let Some(all_tracked) = maybe {
                     let tracked: HashSet<u32> = all_tracked
                         .by_game(&game)
@@ -714,15 +715,15 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
             }
         }
         Command::Changelogs { game, mod_id } => {
-            let maybe = Changelogs::get((&game, mod_id), flags.refresh, &store, &mut nexus);
+            let key = CompoundKey::new(game.clone(), mod_id);
+            let maybe = Changelogs::get(&key, flags.refresh, &store, &mut nexus);
             if let Some(changelogs) = maybe {
                 if flags.json {
                     let pretty = serde_json::to_string_pretty(&changelogs)?;
                     println!("{}", pretty);
                     return Ok(());
                 }
-                if let Some(mod_info) = ModInfoFull::get((&game, mod_id), false, &store, &mut nexus)
-                {
+                if let Some(mod_info) = ModInfoFull::get(&key, false, &store, &mut nexus) {
                     println!(
                         "\nchangelogs for \x1b]8;;{}\x1b\\{}\x1b]8;;\x1b\\",
                         mod_info.url(),
@@ -740,7 +741,8 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
             }
         }
         Command::Files { game, mod_id } => {
-            let maybe = Files::get((&game, mod_id), flags.refresh, &store, &mut nexus);
+            let key = CompoundKey::new(game, mod_id);
+            let maybe = Files::get(&key, flags.refresh, &store, &mut nexus);
             if let Some(files) = maybe {
                 let pretty = serde_json::to_string_pretty(&files)?;
                 println!("{}", pretty);
@@ -750,7 +752,12 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
             }
         }
         Command::Endorsements { game } => {
-            let maybe = EndorsementList::get((), flags.refresh, &store, &mut nexus);
+            let maybe = EndorsementList::get(
+                &EndorsementList::listkey(),
+                flags.refresh,
+                &store,
+                &mut nexus,
+            );
 
             if let Some(opinions) = maybe {
                 if flags.json {

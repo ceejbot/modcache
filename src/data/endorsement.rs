@@ -1,4 +1,4 @@
-use kv::{Codec, Json};
+use kv::Json;
 use owo_colors::OwoColorize;
 use serde::{Deserialize, Serialize};
 
@@ -105,6 +105,10 @@ impl EndorsementList {
             .collect();
         result
     }
+
+    pub fn listkey() -> &'static str {
+        "endorsements"
+    }
 }
 
 impl Display for EndorsementList {
@@ -119,7 +123,7 @@ impl Display for EndorsementList {
     }
 }
 
-impl Cacheable<()> for EndorsementList {
+impl Cacheable<&str> for EndorsementList {
     fn etag(&self) -> &str {
         &self.etag
     }
@@ -132,18 +136,21 @@ impl Cacheable<()> for EndorsementList {
         "endorsements"
     }
 
-    fn get(_key: (), refresh: bool, db: &kv::Store, nexus: &mut NexusClient) -> Option<Box<Self>> {
-        super::get::<Self, ()>((), refresh, db, nexus)
+    fn key(&self) -> &'static str {
+        EndorsementList::listkey()
     }
 
-    fn local(_key: (), db: &kv::Store) -> Option<Box<Self>> {
-        let bucket = super::bucket::<Self, ()>(db).unwrap();
-        let found: Option<Json<Self>> = bucket.get("endorsements").ok()?;
-        found.map(|x| Box::new(x.into_inner()))
+    fn get(
+        key: &&str,
+        refresh: bool,
+        db: &kv::Store,
+        nexus: &mut NexusClient,
+    ) -> Option<Box<Self>> {
+        super::get::<Self, &str>(key, refresh, db, nexus)
     }
 
     fn fetch(
-        _key: (),
+        _key: &&str,
         nexus: &mut crate::nexus::NexusClient,
         etag: Option<String>,
     ) -> Option<Box<Self>> {
@@ -151,8 +158,8 @@ impl Cacheable<()> for EndorsementList {
     }
 
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
-        let bucket = super::bucket::<Self, ()>(db).unwrap();
-        if bucket.set("endorsements", Json(self.clone())).is_ok() {
+        let bucket = super::bucket::<Self, &str>(db).unwrap();
+        if bucket.set(&*self.key(), Json(self.clone())).is_ok() {
             Ok(1)
         } else {
             Ok(0)

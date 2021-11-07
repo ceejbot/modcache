@@ -207,9 +207,13 @@ impl GameMetadata {
     }
 }
 
-impl Cacheable<&str> for GameMetadata {
+impl Cacheable<String> for GameMetadata {
     fn etag(&self) -> &str {
         &self.etag
+    }
+
+    fn key(&self) -> String {
+        self.domain_name.clone()
     }
 
     fn set_etag(&mut self, etag: &str) {
@@ -220,22 +224,21 @@ impl Cacheable<&str> for GameMetadata {
         "games"
     }
 
-    fn get(key: &str, refresh: bool, db: &kv::Store, nexus: &mut NexusClient) -> Option<Box<Self>> {
-        super::get::<Self, &str>(key, refresh, db, nexus)
+    fn get(
+        key: &String,
+        refresh: bool,
+        db: &kv::Store,
+        nexus: &mut NexusClient,
+    ) -> Option<Box<Self>> {
+        super::get::<Self, String>(key, refresh, db, nexus)
     }
 
-    fn local(key: &str, db: &kv::Store) -> Option<Box<Self>> {
-        let bucket = super::bucket::<Self, &str>(db).unwrap();
-        let found: Option<Json<Self>> = bucket.get(key).ok()?;
-        found.map(|x| Box::new(x.into_inner()))
-    }
-
-    fn fetch(key: &str, nexus: &mut NexusClient, etag: Option<String>) -> Option<Box<Self>> {
+    fn fetch(key: &String, nexus: &mut NexusClient, etag: Option<String>) -> Option<Box<Self>> {
         nexus.gameinfo(key, etag).map(Box::new)
     }
 
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
-        let bucket = super::bucket::<Self, &str>(db).unwrap();
+        let bucket = super::bucket::<Self, String>(db).unwrap();
         if bucket.set(&*self.domain_name, Json(self.clone())).is_ok() {
             Ok(1)
         } else {

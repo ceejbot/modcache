@@ -1,13 +1,13 @@
 // All structs and trait impls supporting the full mod info response from the Nexus.
 
-use kv::{Codec, Json};
+use kv::Json;
 use serde::{Deserialize, Serialize};
 
 use std::collections::HashMap;
 use std::fmt::Display;
 
 use crate::nexus::NexusClient;
-use crate::Cacheable;
+use crate::{Cacheable, CompoundKey};
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(default)]
@@ -20,10 +20,6 @@ pub struct Changelogs {
 }
 
 impl Changelogs {
-    pub fn key(key: (&str, u32)) -> String {
-        format!("{}/{}", key.0, key.1)
-    }
-
     pub fn versions(&self) -> &HashMap<String, Vec<String>> {
         &self.versions
     }
@@ -46,9 +42,16 @@ impl Display for Changelogs {
     }
 }
 
-impl Cacheable<(&str, u32)> for Changelogs {
+impl Cacheable<CompoundKey> for Changelogs {
     fn bucket_name() -> &'static str {
         "changelogs"
+    }
+
+    fn key(&self) -> CompoundKey {
+        CompoundKey {
+            domain_name: self.domain_name.clone(),
+            mod_id: self.mod_id,
+        }
     }
 
     fn etag(&self) -> &str {
@@ -60,34 +63,35 @@ impl Cacheable<(&str, u32)> for Changelogs {
     }
 
     fn get(
-        key: (&str, u32),
+        key: &CompoundKey,
         refresh: bool,
         db: &kv::Store,
         nexus: &mut NexusClient,
     ) -> Option<Box<Self>> {
-        super::get::<Self, (&str, u32)>(key, refresh, db, nexus)
+        super::get::<Self, CompoundKey>(key, refresh, db, nexus)
     }
 
-    fn local(key: (&str, u32), db: &kv::Store) -> Option<Box<Self>> {
-        let compound = Changelogs::key(key);
-        let bucket = super::bucket::<Self, (&str, u32)>(db).unwrap();
-        let found: Option<Json<Self>> = bucket.get(&*compound).ok()?;
-        found.map(|x| Box::new(x.into_inner()))
-    }
-
-    fn fetch(key: (&str, u32), nexus: &mut NexusClient, etag: Option<String>) -> Option<Box<Self>> {
+    fn fetch(
+        key: &CompoundKey,
+        nexus: &mut NexusClient,
+        etag: Option<String>,
+    ) -> Option<Box<Self>> {
         // The game & modid are *not* included in the response data. This is okay, but I want it.
-        nexus.changelogs(key.0, key.1, etag).map(|mut v| {
-            v.domain_name = key.0.to_string();
-            v.mod_id = key.1;
-            Box::new(v)
-        })
+        nexus
+            .changelogs(&key.domain_name, key.mod_id, etag)
+            .map(|mut v| {
+                v.domain_name = key.domain_name.clone();
+                v.mod_id = key.mod_id;
+                Box::new(v)
+            })
     }
 
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
-        let bucket = super::bucket::<Self, (&str, u32)>(db).unwrap();
-        let compound = Changelogs::key((&self.domain_name, self.mod_id));
-        if bucket.set(&*compound, Json(self.clone())).is_ok() {
+        let bucket = super::bucket::<Self, CompoundKey>(db).unwrap();
+        if bucket
+            .set(&*self.key().to_string(), Json(self.clone()))
+            .is_ok()
+        {
             Ok(1)
         } else {
             Ok(0)

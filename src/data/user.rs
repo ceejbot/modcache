@@ -1,4 +1,4 @@
-use kv::{Codec, Json};
+use kv::Json;
 use log::{info, warn};
 use owo_colors::OwoColorize;
 use serde::{Deserialize, Serialize};
@@ -51,8 +51,12 @@ impl Cacheable<&str> for AuthenticatedUser {
         "authed_users"
     }
 
+    fn key(&self) -> &'static str {
+        "authed_user"
+    }
+
     fn get(
-        _key: &str,
+        _key: &&str,
         _refresh: bool,
         db: &kv::Store,
         nexus: &mut NexusClient,
@@ -69,13 +73,7 @@ impl Cacheable<&str> for AuthenticatedUser {
         }
     }
 
-    fn local(key: &str, db: &kv::Store) -> Option<Box<Self>> {
-        let bucket = super::bucket::<Self, &str>(db).unwrap();
-        let found: Option<Json<Self>> = bucket.get(key).ok()?;
-        found.map(|x| Box::new(x.into_inner()))
-    }
-
-    fn fetch(_key: &str, nexus: &mut NexusClient, _etag: Option<String>) -> Option<Box<Self>> {
+    fn fetch(_key: &&str, nexus: &mut NexusClient, _etag: Option<String>) -> Option<Box<Self>> {
         if let Ok(user) = nexus.validate() {
             Some(Box::new(user))
         } else {
@@ -85,7 +83,7 @@ impl Cacheable<&str> for AuthenticatedUser {
 
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
         let bucket = super::bucket::<Self, &str>(db).unwrap();
-        if bucket.set("authed_user", Json(self.clone())).is_ok() {
+        if bucket.set(self.key(), Json(self.clone())).is_ok() {
             Ok(1)
         } else {
             Ok(0)

@@ -1,9 +1,9 @@
 //! Nexus mod data structs and trait implementations, plus caching layer.
 //! More complex structures are broken out into separate files.
 
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 
-use kv::Json;
+use kv::{Codec, Json};
 use serde::{Deserialize, Serialize};
 
 pub mod changelogs;
@@ -26,16 +26,12 @@ use crate::nexus::NexusClient;
 
 /// Get the item, looking in local cache first then calling to the Nexus if not found.
 /// Set refresh to true if you want to check the Nexus even if you have a cache hit.
-pub fn get<T, K: Debug + Clone>(
-    key: K,
-    refresh: bool,
-    db: &kv::Store,
-    nexus: &mut NexusClient,
-) -> Option<Box<T>>
+pub fn get<T, K>(key: &K, refresh: bool, db: &kv::Store, nexus: &mut NexusClient) -> Option<Box<T>>
 where
     T: Cacheable<K>,
+    K: Debug + Clone + Display + Into<String>,
 {
-    if let Some(found) = T::local(key.clone(), db) {
+    if let Some(found) = local::<T, K>(key, db) {
         if refresh {
             if let Some(fetched) = T::fetch(key, nexus, Some(found.etag().to_string())) {
                 log::info!("    ↪ refreshed nexus data");
@@ -63,11 +59,10 @@ where
 }
 
 /// Given a bucket name and appropriate types, return a kv bucket for the data.
-pub fn bucket<T, K: Debug + Clone>(
-    db: &kv::Store,
-) -> Option<kv::Bucket<'static, &'static str, Json<T>>>
+pub fn bucket<T, K>(db: &kv::Store) -> Option<kv::Bucket<'static, &'static str, Json<T>>>
 where
     T: Cacheable<K>,
+    K: Debug + Clone + Display + Into<String>,
 {
     match db.bucket::<&str, Json<T>>(Some(T::bucket_name())) {
         Err(e) => {
@@ -78,27 +73,73 @@ where
     }
 }
 
+/// Look for the item locally, in the kv store
+pub fn local<T, K>(key: &K, db: &kv::Store) -> Option<Box<T>>
+where
+    T: Cacheable<K>,
+    K: Debug + Clone + Display + Into<String>,
+{
+    let bucket = bucket::<T, K>(db).unwrap();
+    let found: Option<Json<T>> = bucket.get(&*key.to_string()).ok()?;
+    found.map(|x| Box::new(x.into_inner()))
+}
+
 /// The main trait for objects we store.
 pub trait Cacheable<K>
 where
     Self: for<'de> serde::Deserialize<'de> + serde::Serialize,
+    K: Debug + Clone + Display + Into<String>,
 {
     /// Get the name of the bucket where these items are stored.
     fn bucket_name() -> &'static str;
     /// Get an item of this type, looking in local storage first then fetching from the Nexus if it
     /// isn't found locally. Set `refresh` to true to do a conditional GET to the Nexus for updated
     /// data even if we have a local hit.
-    fn get(key: K, refresh: bool, db: &kv::Store, nexus: &mut NexusClient) -> Option<Box<Self>>;
+    fn get(key: &K, refresh: bool, db: &kv::Store, nexus: &mut NexusClient) -> Option<Box<Self>>;
     /// Get an etag for this data.
     fn etag(&self) -> &str;
     /// Set the etag for this data.
     fn set_etag(&mut self, etag: &str);
-    /// Look for the item locally.
-    fn local(key: K, db: &kv::Store) -> Option<Box<Self>>;
     /// Store this item in local cache.
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize>;
+    /// Get this item's key
+    fn key(&self) -> K;
     /// Fetch this item from the Nexus.
-    fn fetch(key: K, nexus: &mut NexusClient, etag: Option<String>) -> Option<Box<Self>>;
+    fn fetch(key: &K, nexus: &mut NexusClient, etag: Option<String>) -> Option<Box<Self>>;
+}
+
+/// A commonly-used key type that composes the game's name and a mod id.
+#[derive(Debug, Clone)]
+pub struct CompoundKey {
+    domain_name: String,
+    mod_id: u32,
+}
+
+impl CompoundKey {
+    pub fn new(domain_name: String, mod_id: u32) -> Self {
+        Self {
+            domain_name,
+            mod_id,
+        }
+    }
+}
+
+impl Display for CompoundKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}/{}", self.domain_name, self.mod_id)
+    }
+}
+
+impl From<&CompoundKey> for String {
+    fn from(val: &CompoundKey) -> Self {
+        val.clone().to_string()
+    }
+}
+
+impl From<CompoundKey> for String {
+    fn from(val: CompoundKey) -> Self {
+        val.to_string()
+    }
 }
 
 // no home for this structure yet; it's used by several nexus fetches

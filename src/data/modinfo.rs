@@ -9,7 +9,7 @@ use terminal_size::*;
 use std::fmt::Display;
 
 use crate::nexus::NexusClient;
-use crate::{Cacheable, EndorsementStatus};
+use crate::{Cacheable, CompoundKey, EndorsementStatus};
 
 #[derive(serde::Deserialize, Serialize, Debug, Clone)]
 pub struct ModAuthor {
@@ -109,12 +109,8 @@ pub struct ModInfoFull {
 }
 
 impl ModInfoFull {
-    pub fn key(key: (&str, u32)) -> String {
-        format!("{}/{}", key.0, key.1)
-    }
-
     pub fn by_prefix(prefix: &str, db: &kv::Store) -> Vec<Self> {
-        let bucket = super::bucket::<Self, (&str, u32)>(db).unwrap();
+        let bucket = super::bucket::<Self, CompoundKey>(db).unwrap();
 
         let mut result: Vec<Self> = Vec::new();
         for item in bucket.iter_prefix(prefix).flatten() {
@@ -277,7 +273,7 @@ impl Display for ModInfoFull {
     }
 }
 
-impl Cacheable<(&str, u32)> for ModInfoFull {
+impl Cacheable<CompoundKey> for ModInfoFull {
     fn etag(&self) -> &str {
         &self.etag
     }
@@ -290,30 +286,38 @@ impl Cacheable<(&str, u32)> for ModInfoFull {
         "mods"
     }
 
+    fn key(&self) -> CompoundKey {
+        CompoundKey {
+            domain_name: self.domain_name.clone(),
+            mod_id: self.mod_id,
+        }
+    }
+
     fn get(
-        key: (&str, u32),
+        key: &CompoundKey,
         refresh: bool,
         db: &kv::Store,
         nexus: &mut NexusClient,
     ) -> Option<Box<Self>> {
-        super::get::<Self, (&str, u32)>(key, refresh, db, nexus)
+        super::get::<Self, CompoundKey>(key, refresh, db, nexus)
     }
 
-    fn local(key: (&str, u32), db: &kv::Store) -> Option<Box<Self>> {
-        let compound = ModInfoFull::key(key);
-        let bucket = super::bucket::<Self, (&str, u32)>(db).unwrap();
-        let found: Option<Json<Self>> = bucket.get(&*compound).ok()?;
-        found.map(|x| Box::new(x.into_inner()))
-    }
-
-    fn fetch(key: (&str, u32), nexus: &mut NexusClient, etag: Option<String>) -> Option<Box<Self>> {
-        nexus.mod_by_id(key.0, key.1, etag).map(Box::new)
+    fn fetch(
+        key: &CompoundKey,
+        nexus: &mut NexusClient,
+        etag: Option<String>,
+    ) -> Option<Box<Self>> {
+        nexus
+            .mod_by_id(&key.domain_name, key.mod_id, etag)
+            .map(Box::new)
     }
 
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
-        let bucket = super::bucket::<Self, (&str, u32)>(db).unwrap();
-        let compound = ModInfoFull::key((&self.domain_name, self.mod_id));
-        if bucket.set(&*compound, Json(self.clone())).is_ok() {
+        let bucket = super::bucket::<Self, CompoundKey>(db).unwrap();
+        if bucket
+            .set(&*self.key().to_string(), Json(self.clone()))
+            .is_ok()
+        {
             Ok(1)
         } else {
             Ok(0)

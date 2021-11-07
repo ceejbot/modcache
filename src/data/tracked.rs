@@ -1,4 +1,4 @@
-use kv::{Codec, Json};
+use kv::Json;
 use owo_colors::OwoColorize;
 use prettytable::{cell, row, Table};
 use serde::{Deserialize, Serialize};
@@ -53,6 +53,10 @@ impl Tracked {
             .collect();
         result
     }
+
+    pub fn listkey() -> &'static str {
+        "tracked"
+    }
 }
 
 impl Display for Tracked {
@@ -75,7 +79,7 @@ impl Display for Tracked {
     }
 }
 
-impl Cacheable<()> for Tracked {
+impl Cacheable<&str> for Tracked {
     fn etag(&self) -> &str {
         &self.etag
     }
@@ -88,23 +92,26 @@ impl Cacheable<()> for Tracked {
         "mod_ref_lists"
     }
 
-    fn get(_key: (), refresh: bool, db: &kv::Store, nexus: &mut NexusClient) -> Option<Box<Self>> {
-        super::get::<Self, ()>((), refresh, db, nexus)
+    fn key(&self) -> &'static str {
+        "tracked"
     }
 
-    fn local(_key: (), db: &kv::Store) -> Option<Box<Self>> {
-        let bucket = super::bucket::<Self, ()>(db).unwrap();
-        let found: Option<Json<Self>> = bucket.get("tracked").ok()?;
-        found.map(|x| Box::new(x.into_inner()))
+    fn get(
+        key: &&str,
+        refresh: bool,
+        db: &kv::Store,
+        nexus: &mut NexusClient,
+    ) -> Option<Box<Self>> {
+        super::get::<Self, &str>(key, refresh, db, nexus)
     }
 
-    fn fetch(_key: (), nexus: &mut NexusClient, etag: Option<String>) -> Option<Box<Self>> {
+    fn fetch(_key: &&str, nexus: &mut NexusClient, etag: Option<String>) -> Option<Box<Self>> {
         nexus.tracked(etag).map(Box::new)
     }
 
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
-        let bucket = super::bucket::<Self, ()>(db).unwrap();
-        if bucket.set("tracked", Json(self.clone())).is_ok() {
+        let bucket = super::bucket::<Self, &str>(db).unwrap();
+        if bucket.set(self.key(), Json(self.clone())).is_ok() {
             Ok(1)
         } else {
             Ok(0)

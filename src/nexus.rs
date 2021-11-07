@@ -125,7 +125,7 @@ impl NexusClient {
         let response = match request.call() {
             Ok(v) => v,
             Err(ureq::Error::Status(code, response)) => {
-                // max request rate is 30/sec, which tbh can exceed instantly.
+                // max request rate is 30/sec, which tbh we can exceed instantly.
                 if code == 429 {
                     log::warn!("The Nexus has rate-limited you!");
                 } else {
