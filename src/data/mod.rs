@@ -73,7 +73,7 @@ where
     }
 }
 
-/// Look for the item locally, in the kv store
+/// Look for an item locally, in the kv store, by type and key.
 pub fn local<T, K>(key: &K, db: &kv::Store) -> Option<Box<T>>
 where
     T: Cacheable<K>,
@@ -96,16 +96,16 @@ where
     /// isn't found locally. Set `refresh` to true to do a conditional GET to the Nexus for updated
     /// data even if we have a local hit.
     fn get(key: &K, refresh: bool, db: &kv::Store, nexus: &mut NexusClient) -> Option<Box<Self>>;
+    /// Fetch an item from the Nexus by key.
+    fn fetch(key: &K, nexus: &mut NexusClient, etag: Option<String>) -> Option<Box<Self>>;
+    /// Get this item's key
+    fn key(&self) -> K;
     /// Get an etag for this data.
     fn etag(&self) -> &str;
     /// Set the etag for this data.
     fn set_etag(&mut self, etag: &str);
     /// Store this item in local cache.
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize>;
-    /// Get this item's key
-    fn key(&self) -> K;
-    /// Fetch this item from the Nexus.
-    fn fetch(key: &K, nexus: &mut NexusClient, etag: Option<String>) -> Option<Box<Self>>;
 }
 
 /// A commonly-used key type that composes the game's name and a mod id.

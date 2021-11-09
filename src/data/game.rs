@@ -1,5 +1,5 @@
 use itertools::Itertools;
-use kv::{Codec, Json};
+use kv::Json;
 use num_format::{Locale, ToFormattedString};
 use owo_colors::OwoColorize;
 use regex::RegexBuilder;

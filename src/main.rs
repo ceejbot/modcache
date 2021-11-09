@@ -397,24 +397,34 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
         }
         Command::Hidden { game } => {
             if let Some(metadata) = GameMetadata::get(&game, flags.refresh, &store, &mut nexus) {
-                let mods = metadata.mods_hidden(&store);
+                let mut mods = metadata.mods_hidden(&store);
+                if let Some(all_tracked) = Tracked::get(&Tracked::listkey(), flags.refresh, &store, &mut nexus) {
+                    // filter tracked mods from hidden
+                    let tracked: HashSet<u32> = all_tracked
+                        .by_game(&game)
+                        .iter()
+                        .map(|xs| xs.mod_id)
+                        .collect();
+                    mods = mods.into_iter().filter(|xs| tracked.contains(&xs.mod_id())).collect();
+                }
+
                 if flags.json {
                     let pretty = serde_json::to_string_pretty(&mods)?;
                     println!("{}", pretty);
                 } else {
                     if mods.is_empty() {
                         println!(
-                            "\nNo hidden mods in cache for {}",
+                            "\nNo hidden but tracked mods in cache for {}",
                             metadata.name().yellow().bold()
                         );
                     } else if mods.len() == 1 {
                         println!(
-                            "\nOne hidden mod in cache for {}:\n",
+                            "\nOne hidden but tracked mod in cache for {}:\n",
                             metadata.name().yellow().bold()
                         );
                     } else {
                         println!(
-                            "\n{} hidden mods in cache for {}:\n",
+                            "\n{} hidden but tracked mods in cache for {}:\n",
                             mods.len(),
                             metadata.name().yellow().bold()
                         );
@@ -674,8 +684,12 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
             for mod_id in ids.iter() {
                 match nexus.untrack(&game, *mod_id) {
                     Ok(message) => {
-                        let pretty = serde_json::to_string_pretty(&message)?;
-                        println!("{}", pretty);
+                        if flags.json {
+                            let pretty = serde_json::to_string_pretty(&message)?;
+                            println!("{}", pretty);
+                        } else {
+                            println!("{}", message.message);
+                        }
                     }
                     Err(e) => {
                         println!("Error untracking {}:\n{:?}", mod_id, e);
