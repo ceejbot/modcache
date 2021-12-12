@@ -208,18 +208,6 @@ impl GameMetadata {
 }
 
 impl Cacheable<String> for GameMetadata {
-    fn etag(&self) -> &str {
-        &self.etag
-    }
-
-    fn key(&self) -> String {
-        self.domain_name.clone()
-    }
-
-    fn set_etag(&mut self, etag: &str) {
-        self.etag = etag.to_string()
-    }
-
     fn bucket_name() -> &'static str {
         "games"
     }
@@ -237,6 +225,18 @@ impl Cacheable<String> for GameMetadata {
         nexus.gameinfo(key, etag).map(Box::new)
     }
 
+    fn key(&self) -> String {
+        self.domain_name.clone()
+    }
+
+    fn etag(&self) -> &str {
+        &self.etag
+    }
+
+    fn set_etag(&mut self, etag: &str) {
+        self.etag = etag.to_string()
+    }
+
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
         let bucket = super::bucket::<Self, String>(db).unwrap();
         if bucket.set(&*self.domain_name, Json(self.clone())).is_ok() {
@@ -244,5 +244,9 @@ impl Cacheable<String> for GameMetadata {
         } else {
             Ok(0)
         }
+    }
+
+    fn update(&self, other: &Self) -> Self {
+        other.clone()
     }
 }

@@ -274,23 +274,8 @@ impl Display for ModInfoFull {
 }
 
 impl Cacheable<CompoundKey> for ModInfoFull {
-    fn etag(&self) -> &str {
-        &self.etag
-    }
-
-    fn set_etag(&mut self, etag: &str) {
-        self.etag = etag.to_string()
-    }
-
     fn bucket_name() -> &'static str {
         "mods"
-    }
-
-    fn key(&self) -> CompoundKey {
-        CompoundKey {
-            domain_name: self.domain_name.clone(),
-            mod_id: self.mod_id,
-        }
     }
 
     fn get(
@@ -312,6 +297,21 @@ impl Cacheable<CompoundKey> for ModInfoFull {
             .map(Box::new)
     }
 
+    fn key(&self) -> CompoundKey {
+        CompoundKey {
+            domain_name: self.domain_name.clone(),
+            mod_id: self.mod_id,
+        }
+    }
+
+    fn etag(&self) -> &str {
+        &self.etag
+    }
+
+    fn set_etag(&mut self, etag: &str) {
+        self.etag = etag.to_string()
+    }
+
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
         let bucket = super::bucket::<Self, CompoundKey>(db).unwrap();
         if bucket
@@ -321,6 +321,28 @@ impl Cacheable<CompoundKey> for ModInfoFull {
             Ok(1)
         } else {
             Ok(0)
+        }
+    }
+
+    fn update(&self, other: &Self) -> Self {
+        // This type is the reason this trait function exists. If a mod is flipping
+        // to _hidden_, we do not want to update anything but the status field.
+        // The cloning here is nasty but I'm making it work first then cleaning it up.
+        match other.status {
+            ModStatus::NotPublished => other.clone(),
+            ModStatus::Published => {
+                // We take all updates.
+                other.clone()
+            }
+            _ => {
+                // Take only the status and the etag updates.
+                let mut result = self.clone();
+                result.status = other.status.clone();
+                result.updated_time = other.updated_time.clone();
+                result.updated_timestamp = other.updated_timestamp;
+                result.etag = other.etag.clone();
+                result
+            }
         }
     }
 }

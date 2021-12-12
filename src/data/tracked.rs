@@ -80,20 +80,8 @@ impl Display for Tracked {
 }
 
 impl Cacheable<&str> for Tracked {
-    fn etag(&self) -> &str {
-        &self.etag
-    }
-
-    fn set_etag(&mut self, etag: &str) {
-        self.etag = etag.to_string()
-    }
-
     fn bucket_name() -> &'static str {
         "mod_ref_lists"
-    }
-
-    fn key(&self) -> &'static str {
-        "tracked"
     }
 
     fn get(
@@ -109,6 +97,18 @@ impl Cacheable<&str> for Tracked {
         nexus.tracked(etag).map(Box::new)
     }
 
+    fn key(&self) -> &'static str {
+        "tracked"
+    }
+
+    fn etag(&self) -> &str {
+        &self.etag
+    }
+
+    fn set_etag(&mut self, etag: &str) {
+        self.etag = etag.to_string()
+    }
+
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
         let bucket = super::bucket::<Self, &str>(db).unwrap();
         if bucket.set(self.key(), Json(self.clone())).is_ok() {
@@ -116,5 +116,9 @@ impl Cacheable<&str> for Tracked {
         } else {
             Ok(0)
         }
+    }
+
+    fn update(&self, other: &Self) -> Self {
+        other.clone()
     }
 }

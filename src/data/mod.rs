@@ -35,10 +35,11 @@ where
         if refresh {
             if let Some(fetched) = T::fetch(key, nexus, Some(found.etag().to_string())) {
                 log::info!("    ↪ refreshed nexus data");
-                if fetched.store(db).is_ok() {
+                let merged = found.update(&fetched);
+                if merged.store(db).is_ok() {
                     log::info!("    ✓ cached nexus data");
                 }
-                Some(fetched)
+                Some(Box::new(merged))
             } else {
                 log::info!("    ↩ no update; responding with cached");
                 Some(found)
@@ -106,6 +107,8 @@ where
     fn set_etag(&mut self, etag: &str);
     /// Store this item in local cache.
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize>;
+    /// Merge properties, if wanted, before storing an updated version of this object.
+    fn update(&self, other: &Self) -> Self;
 }
 
 /// A commonly-used key type that composes the game's name and a mod id.

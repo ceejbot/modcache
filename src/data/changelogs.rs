@@ -97,4 +97,8 @@ impl Cacheable<CompoundKey> for Changelogs {
             Ok(0)
         }
     }
+
+    fn update(&self, other: &Self) -> Self {
+        other.clone()
+    }
 }

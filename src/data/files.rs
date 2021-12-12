@@ -64,21 +64,6 @@ impl Cacheable<CompoundKey> for Files {
         "files"
     }
 
-    fn key(&self) -> CompoundKey {
-        CompoundKey {
-            domain_name: self.domain_name.clone(),
-            mod_id: self.mod_id,
-        }
-    }
-
-    fn etag(&self) -> &str {
-        &self.etag
-    }
-
-    fn set_etag(&mut self, etag: &str) {
-        self.etag = etag.to_string()
-    }
-
     fn get(
         key: &CompoundKey,
         refresh: bool,
@@ -103,6 +88,21 @@ impl Cacheable<CompoundKey> for Files {
             })
     }
 
+    fn key(&self) -> CompoundKey {
+        CompoundKey {
+            domain_name: self.domain_name.clone(),
+            mod_id: self.mod_id,
+        }
+    }
+
+    fn etag(&self) -> &str {
+        &self.etag
+    }
+
+    fn set_etag(&mut self, etag: &str) {
+        self.etag = etag.to_string()
+    }
+
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
         let bucket = super::bucket::<Self, CompoundKey>(db).unwrap();
         if bucket
@@ -113,5 +113,9 @@ impl Cacheable<CompoundKey> for Files {
         } else {
             Ok(0)
         }
+    }
+
+    fn update(&self, other: &Self) -> Self {
+        other.clone()
     }
 }

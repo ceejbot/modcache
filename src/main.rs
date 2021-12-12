@@ -398,14 +398,19 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
         Command::Hidden { game } => {
             if let Some(metadata) = GameMetadata::get(&game, flags.refresh, &store, &mut nexus) {
                 let mut mods = metadata.mods_hidden(&store);
-                if let Some(all_tracked) = Tracked::get(&Tracked::listkey(), flags.refresh, &store, &mut nexus) {
+                if let Some(all_tracked) =
+                    Tracked::get(&Tracked::listkey(), flags.refresh, &store, &mut nexus)
+                {
                     // filter tracked mods from hidden
                     let tracked: HashSet<u32> = all_tracked
                         .by_game(&game)
                         .iter()
                         .map(|xs| xs.mod_id)
                         .collect();
-                    mods = mods.into_iter().filter(|xs| tracked.contains(&xs.mod_id())).collect();
+                    mods = mods
+                        .into_iter()
+                        .filter(|xs| tracked.contains(&xs.mod_id()))
+                        .collect();
                 }
 
                 if flags.json {
