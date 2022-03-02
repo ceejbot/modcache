@@ -1,13 +1,12 @@
 use std::collections::{HashMap, HashSet};
 
+use clap::{Parser, Subcommand};
 use dotenv::dotenv;
 use itertools::Itertools;
 use log::{debug, error, info, warn};
 use owo_colors::OwoColorize;
 use prettytable::{cell, row, Table};
 use serde::Serialize;
-use structopt::clap::AppSettings::*;
-use structopt::StructOpt;
 use term_grid::{Cell, Direction, Filling, Grid, GridOptions};
 use terminal_size::*;
 
@@ -17,42 +16,41 @@ pub mod nexus;
 use data::*;
 
 // Set up the cli and commands
-#[derive(Clone, Serialize, StructOpt)]
-#[structopt(name = "modcache", about = "ask questions about nexus mod data")]
-#[structopt(global_setting(ColoredHelp), global_setting(ColorAuto))]
+#[derive(Parser)]
+#[clap(author, version, about, long_about = None)]
 pub struct Flags {
-    #[structopt(
+    #[clap(
         short,
         long,
         parse(from_occurrences),
         help = "Pass -v or -vv to increase verbosity"
     )]
     verbose: u64,
-    #[structopt(
+    #[clap(
         short,
         long,
         help = "Emit full output as json; not applicable everywhere"
     )]
     json: bool,
-    #[structopt(
+    #[clap(
         short,
         long,
         help = "Refresh data from the Nexus; not applicable everywhere"
     )]
     refresh: bool,
-    #[structopt(subcommand)]
+    #[clap(subcommand)]
     cmd: Command,
 }
 
-#[derive(Clone, Serialize, StructOpt)]
+#[derive(Clone, Serialize, Subcommand)]
 enum Command {
     /// Populate the local cache with mods tracked for a specific game.
     Populate {
         /// The number of API calls allowed before stopping.
-        #[structopt(short, long, default_value = "50")]
+        #[clap(short, long, default_value = "50")]
         limit: u16,
         /// The game to populate.
-        #[structopt(default_value = "skyrimspecialedition")]
+        #[clap(default_value = "skyrimspecialedition")]
         game: String,
     },
     /// Test your Nexus API key; whoami
@@ -67,13 +65,13 @@ enum Command {
         /// The id of the mod to track
         mod_id: u32,
         /// Which game the mods belong to; Nexus short name
-        #[structopt(default_value = "skyrimspecialedition")]
+        #[clap(default_value = "skyrimspecialedition")]
         game: String,
     },
     /// Stop tracking a mod or list of mods, by id.
     Untrack {
         /// Which game the mods belong to; Nexus short name
-        #[structopt(short, long, default_value = "skyrimspecialedition")]
+        #[clap(short, long, default_value = "skyrimspecialedition")]
         game: String,
         /// The ids of the mods to stop tracking
         ids: Vec<u32>,
@@ -88,7 +86,7 @@ enum Command {
         /// The id of the mod to fetch changelogs for
         mod_id: u32,
         /// Which game the mods belong to; Nexus short name
-        #[structopt(default_value = "skyrimspecialedition")]
+        #[clap(default_value = "skyrimspecialedition")]
         game: String,
     },
     /// Get the list of files for a specific mod. Not very useful yet.
@@ -96,7 +94,7 @@ enum Command {
         /// The id of the mod to fetch files for
         mod_id: u32,
         /// Which game the mods belong to; Nexus short name
-        #[structopt(default_value = "skyrimspecialedition")]
+        #[clap(default_value = "skyrimspecialedition")]
         game: String,
     },
     /// Fetch the list of mods you have endorsed
@@ -109,7 +107,7 @@ enum Command {
         /// The ids of the mods to endorse
         ids: Vec<u32>,
         /// Which game the mods belong to; Nexus short name
-        #[structopt(default_value = "skyrimspecialedition")]
+        #[clap(default_value = "skyrimspecialedition")]
         game: String,
     },
     /// Abstain from endorsing a mod.
@@ -117,17 +115,17 @@ enum Command {
         /// The id of the mod to refuse to endorse
         mod_id: u32,
         /// Which game the mods belong to; Nexus short name
-        #[structopt(default_value = "skyrimspecialedition")]
+        #[clap(default_value = "skyrimspecialedition")]
         game: String,
     },
     /// Get Nexus metadata about a game by slug
     Game {
-        #[structopt(default_value = "skyrimspecialedition")]
+        #[clap(default_value = "skyrimspecialedition")]
         game: String,
     },
     /// Get all mods locally cached for this game by slug
     Mods {
-        #[structopt(default_value = "skyrimspecialedition")]
+        #[clap(default_value = "skyrimspecialedition")]
         game: String,
     },
     /// Find mods with names matching the given string, for the named game.
@@ -135,7 +133,7 @@ enum Command {
         /// Look for mods with names similar to this
         name: String,
         /// The slug for the game to filter by.
-        #[structopt(default_value = "skyrimspecialedition")]
+        #[clap(default_value = "skyrimspecialedition")]
         game: String,
     },
     /// Find mods that mention this string in their names or text summaries.
@@ -143,40 +141,40 @@ enum Command {
         /// Look for mods that mention this string
         text: String,
         /// The slug for the game to filter by.
-        #[structopt(default_value = "skyrimspecialedition")]
+        #[clap(default_value = "skyrimspecialedition")]
         game: String,
     },
     /// Find mods for this game that are hidden, probably so you can untrack them.
     Hidden {
         /// The slug for the game to consider.
-        #[structopt(default_value = "skyrimspecialedition")]
+        #[clap(default_value = "skyrimspecialedition")]
         game: String,
     },
     /// Find mods for this game that are removed, probably so you can untrack them.
     Removed {
         /// The slug for the game to consider.
-        #[structopt(default_value = "skyrimspecialedition")]
+        #[clap(default_value = "skyrimspecialedition")]
         game: String,
     },
     /// Find mods for this game that were wastebinned by their authors.
     Wastebinned {
         /// The slug for the game to consider.
-        #[structopt(default_value = "skyrimspecialedition")]
+        #[clap(default_value = "skyrimspecialedition")]
         game: String,
     },
     /// Show the 10 top all-time trending mods for a game
     Trending {
-        #[structopt(default_value = "skyrimspecialedition")]
+        #[clap(default_value = "skyrimspecialedition")]
         game: String,
     },
     /// Show 10 mods most recently added for a game
     Latest {
-        #[structopt(default_value = "skyrimspecialedition")]
+        #[clap(default_value = "skyrimspecialedition")]
         game: String,
     },
     /// Show the 10 mods most recently updated for a game
     Updated {
-        #[structopt(default_value = "skyrimspecialedition")]
+        #[clap(default_value = "skyrimspecialedition")]
         game: String,
     },
     /// Display detailed info for a single mod
@@ -184,7 +182,7 @@ enum Command {
         /// The id of the mod to show
         mod_id: u32,
         /// Which game the mods belong to; Nexus short name
-        #[structopt(default_value = "skyrimspecialedition")]
+        #[clap(default_value = "skyrimspecialedition")]
         game: String,
     },
 }
@@ -293,7 +291,7 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
     dotenv().ok();
     let nexuskey = std::env::var("NEXUS_API_KEY")
         .expect("You must provide your personal Nexus API key in the env var NEXUS_API_KEY.");
-    let flags = Flags::from_args();
+    let flags = Flags::parse();
 
     loggerv::Logger::new()
         .verbosity(flags.verbose)
