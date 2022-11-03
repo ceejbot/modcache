@@ -5,7 +5,7 @@ use dotenv::dotenv;
 use itertools::Itertools;
 use log::{debug, error, info, warn};
 use owo_colors::OwoColorize;
-use prettytable::{cell, row, Table};
+use prettytable::{row, Table};
 use serde::Serialize;
 use term_grid::{Cell, Direction, Filling, Grid, GridOptions};
 use terminal_size::*;
@@ -25,8 +25,7 @@ pub struct Flags {
         parse(from_occurrences),
         help = "Pass -v or -vv to increase verbosity"
     )]
-    verbose: u64,
-    #[clap(
+    verbose: u64,    #[clap(
         short,
         long,
         help = "Emit full output as json; not applicable everywhere"
@@ -405,10 +404,7 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                         .iter()
                         .map(|xs| xs.mod_id)
                         .collect();
-                    mods = mods
-                        .into_iter()
-                        .filter(|xs| tracked.contains(&xs.mod_id()))
-                        .collect();
+                    mods.retain(|xs| tracked.contains(&xs.mod_id()));
                 }
 
                 if flags.json {

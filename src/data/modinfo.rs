@@ -113,12 +113,13 @@ impl ModInfoFull {
         let bucket = super::bucket::<Self, CompoundKey>(db).unwrap();
 
         let mut result: Vec<Self> = Vec::new();
-        for item in bucket.iter_prefix(prefix).flatten() {
-            if let Ok(modinfo) = item.value::<Json<Self>>() {
-                result.push(modinfo.into_inner());
+        if let Ok(prefixes) = bucket.iter_prefix(&prefix) {
+            for item in prefixes.flatten() {
+                if let Ok(modinfo) = item.value::<Json<Self>>() {
+                    result.push(modinfo.into_inner());
+                }
             }
         }
-
         result
     }
 
@@ -315,7 +316,7 @@ impl Cacheable<CompoundKey> for ModInfoFull {
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
         let bucket = super::bucket::<Self, CompoundKey>(db).unwrap();
         if bucket
-            .set(&*self.key().to_string(), Json(self.clone()))
+            .set(&&*self.key().to_string(), &Json(self.clone()))
             .is_ok()
         {
             Ok(1)

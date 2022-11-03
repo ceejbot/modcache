@@ -1,6 +1,6 @@
 use kv::Json;
 use owo_colors::OwoColorize;
-use prettytable::{cell, row, Table};
+use prettytable::{row, Table};
 use serde::{Deserialize, Serialize};
 
 use std::collections::HashMap;
@@ -111,7 +111,7 @@ impl Cacheable<&str> for Tracked {
 
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
         let bucket = super::bucket::<Self, &str>(db).unwrap();
-        if bucket.set(self.key(), Json(self.clone())).is_ok() {
+        if bucket.set(&self.key(), &Json(self.clone())).is_ok() {
             Ok(1)
         } else {
             Ok(0)

@@ -239,7 +239,7 @@ impl Cacheable<String> for GameMetadata {
 
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
         let bucket = super::bucket::<Self, String>(db).unwrap();
-        if bucket.set(&*self.domain_name, Json(self.clone())).is_ok() {
+        if bucket.set(&&*self.domain_name, &Json(self.clone())).is_ok() {
             Ok(1)
         } else {
             Ok(0)

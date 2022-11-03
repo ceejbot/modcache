@@ -89,7 +89,7 @@ impl Cacheable<CompoundKey> for Changelogs {
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
         let bucket = super::bucket::<Self, CompoundKey>(db).unwrap();
         if bucket
-            .set(&*self.key().to_string(), Json(self.clone()))
+            .set(&&*self.key().to_string(), &Json(self.clone()))
             .is_ok()
         {
             Ok(1)

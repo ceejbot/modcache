@@ -81,7 +81,7 @@ where
     K: Debug + Clone + Display + Into<String>,
 {
     let bucket = bucket::<T, K>(db).unwrap();
-    let found: Option<Json<T>> = bucket.get(&*key.to_string()).ok()?;
+    let found: Option<Json<T>> = bucket.get(&&*key.to_string()).ok()?;
     found.map(|x| Box::new(x.into_inner()))
 }
 

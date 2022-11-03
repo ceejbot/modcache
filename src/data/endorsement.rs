@@ -159,7 +159,7 @@ impl Cacheable<&str> for EndorsementList {
 
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
         let bucket = super::bucket::<Self, &str>(db).unwrap();
-        if bucket.set(&*self.key(), Json(self.clone())).is_ok() {
+        if bucket.set(&self.key(), &Json(self.clone())).is_ok() {
             Ok(1)
         } else {
             Ok(0)
