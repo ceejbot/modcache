@@ -1,7 +1,16 @@
+#![forbid(unsafe_code)]
+#![deny(future_incompatible)]
+#![warn(
+    missing_debug_implementations,
+    rust_2018_idioms,
+    trivial_casts,
+    unused_qualifications
+)]
+
 use std::collections::{HashMap, HashSet};
 
 use clap::{Parser, Subcommand};
-use dotenv::dotenv;
+use dotenvy::dotenv;
 use itertools::Itertools;
 use log::{debug, error, info, warn};
 use owo_colors::OwoColorize;
@@ -16,16 +25,17 @@ pub mod nexus;
 use data::*;
 
 // Set up the cli and commands
-#[derive(Parser)]
+#[derive(Debug, Parser)]
 #[clap(author, version, about, long_about = None)]
 pub struct Flags {
     #[clap(
         short,
         long,
-        parse(from_occurrences),
+        action = clap::ArgAction::Count,
         help = "Pass -v or -vv to increase verbosity"
     )]
-    verbose: u64,    #[clap(
+    verbose: u64,
+    #[clap(
         short,
         long,
         help = "Emit full output as json; not applicable everywhere"
@@ -41,7 +51,7 @@ pub struct Flags {
     cmd: Command,
 }
 
-#[derive(Clone, Serialize, Subcommand)]
+#[derive(Clone, Debug, Serialize, Subcommand)]
 enum Command {
     /// Populate the local cache with mods tracked for a specific game.
     Populate {
@@ -277,7 +287,7 @@ fn show_endorsements(
                 ]);
             }
         });
-        println!("{}", table);
+        println!("{table}");
     };
 
     println!("endorsed {}:", pluralize_mod(endorsed.len()));
@@ -540,7 +550,7 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                 let modinfo = item.unwrap();
                 let key = CompoundKey::new(modinfo.domain_name.clone(), modinfo.mod_id);
                 // Find the next uncached mod.
-                let maybe_mod = if data::local::<ModInfoFull, CompoundKey>(&key, &store).is_some() {
+                let maybe_mod = if local::<ModInfoFull, CompoundKey>(&key, &store).is_some() {
                     None
                 } else if let Some(m) = ModInfoFull::fetch(&key, &mut nexus, None) {
                     m.store(&store)?;
@@ -610,7 +620,7 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                         filtered.iter().for_each(|m| {
                             let key = CompoundKey::new(game.clone(), m.mod_id);
                             if let Some(mod_info) =
-                                data::local::<ModInfoFull, CompoundKey>(&key, &store)
+                                local::<ModInfoFull, CompoundKey>(&key, &store)
                             {
                                 let bucket = cat_map
                                     .entry(mod_info.category_id())

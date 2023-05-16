@@ -35,6 +35,7 @@ impl Default for RateLimits {
 }
 
 // Now a wrapper for the client so nobody else has to think about rate limiting.
+#[derive(Debug)]
 pub struct NexusClient {
     pub agent: ureq::Agent,
     apikey: String,

@@ -139,7 +139,7 @@ impl Cacheable<&str> for EndorsementList {
 
     fn fetch(
         _key: &&str,
-        nexus: &mut crate::nexus::NexusClient,
+        nexus: &mut NexusClient,
         etag: Option<String>,
     ) -> Option<Box<Self>> {
         nexus.endorsements(etag).map(Box::new)

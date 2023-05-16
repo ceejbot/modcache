@@ -72,10 +72,9 @@ impl Display for Tracked {
         let mut table = Table::new();
         table.set_format(*prettytable::format::consts::FORMAT_CLEAN);
         for (k, v) in mapping.iter() {
-            let length = v.len().to_string();
-            table.add_row(row![&length.bold(), k]);
+            table.add_row(row![v.len().bold(), k]);
         }
-        write!(f, "{}", table)
+        write!(f, "{table}")
     }
 }
 
