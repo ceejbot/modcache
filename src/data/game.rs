@@ -124,7 +124,7 @@ impl GameMetadata {
             .sorted_by(|left, right| left.name().cmp(right.name()))
             .map(|cat| format!("    {}", cat.name().purple()))
             .collect();
-        crate::print_in_grid(cats, 2);
+        crate::formatting::print_in_grid(cats, 2);
     }
 
     /// Get all mods cached for this game.
@@ -214,10 +214,10 @@ impl Cacheable<String> for GameMetadata {
     fn get(
         key: &String,
         refresh: bool,
-        db: &kv::Store,
+        store: &kv::Store,
         nexus: &mut NexusClient,
     ) -> Option<Box<Self>> {
-        super::get::<Self, String>(key, refresh, db, nexus)
+        super::get::<Self, String>(key, refresh, store, nexus)
     }
 
     fn fetch(key: &String, nexus: &mut NexusClient, etag: Option<String>) -> Option<Box<Self>> {

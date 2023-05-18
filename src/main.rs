@@ -7,21 +7,20 @@
     unused_qualifications
 )]
 
-use std::collections::{HashMap, HashSet};
+use std::sync::Mutex;
 
 use clap::{Parser, Subcommand};
 use dotenvy::dotenv;
-use itertools::Itertools;
-use log::{debug, error, info, warn};
+use once_cell::sync::OnceCell;
 use owo_colors::OwoColorize;
-use prettytable::{row, Table};
 use serde::Serialize;
-use term_grid::{Cell, Direction, Filling, Grid, GridOptions};
-use terminal_size::*;
 
+pub mod commands;
 pub mod data;
+pub mod formatting;
 pub mod nexus;
 
+use commands::*;
 use data::*;
 
 // Set up the cli and commands
@@ -63,6 +62,7 @@ enum Command {
         game: String,
     },
     /// Test your Nexus API key; whoami
+    #[clap(alias = "whoami")]
     Validate,
     /// Fetch your list of tracked mods and show a by-game summary.
     Tracked {
@@ -196,110 +196,37 @@ enum Command {
     },
 }
 
-pub fn print_in_grid(items: Vec<impl ToString>, column_hint: usize) {
-    let width = if let Some((Width(w), Height(_h))) = terminal_size() {
-        w - 2
-    } else {
-        72
-    };
+/// A shared reference to our kv store on disk.
+static STORE: OnceCell<kv::Store> = OnceCell::new();
 
-    let mut grid = Grid::new(GridOptions {
-        filling: Filling::Spaces(2),
-        direction: Direction::LeftToRight,
-    });
-    for item in items {
-        grid.add(Cell::from(item.to_string()));
-    }
-
-    if let Some(g) = grid.fit_into_width(width.into()) {
-        // https://github.com/ogham/rust-term-grid/issues/11
-        println!("{}", g);
-    } else {
-        println!("{}", grid.fit_into_columns(column_hint));
-    }
+/// Fetch our kv store instance
+pub fn store() -> &'static kv::Store {
+    STORE.get_or_init(|| {
+        let dbpath = std::env::var("NEXUS_CACHE_PATH")
+            .unwrap_or_else(|_| "./db/nexus_cache.sled".to_string());
+        log::debug!("Storing data in {}", dbpath.bold());
+        let cfg = kv::Config::new(dbpath);
+        kv::Store::new(cfg).expect("unable to create k/v store!")
+    })
 }
 
-/// Given a count, return a string with the count + the word `mod` pluralized for English.
-fn pluralize_mod(count: usize) -> String {
-    if count == 1 {
-        format!("{} mod", "one".blue())
-    } else {
-        format!("{} mods", count.blue())
-    }
-}
+/// A shared reference to our nexus client. This is persistent so we can manage
+/// rate limiting and API call limits
+static NEXUS: OnceCell<Mutex<nexus::NexusClient>> = OnceCell::new();
 
-fn emit_modlist_with_caption(modlist: Vec<ModInfoFull>, caption: &str) {
-    if !modlist.is_empty() {
-        println!(
-            "{} {}:",
-            pluralize_mod(modlist.len()).bold(),
-            caption.bold()
-        );
-        print_in_grid(modlist.iter().map(|xs| xs.mod_id()).collect(), 10);
-    }
-}
+/// Fetch our nexus client instance
+pub fn nexus_client() -> &'static Mutex<nexus::NexusClient> {
+    NEXUS.get_or_init(|| {
+        let nexuskey = std::env::var("NEXUS_API_KEY")
+            .expect("You must provide your personal Nexus API key in the env var NEXUS_API_KEY.");
 
-/// Display mod endorsements for a specific game, sorted by status.
-fn show_endorsements(
-    game: &str,
-    modlist: &[UserEndorsement],
-    store: &kv::Store,
-    client: &mut nexus::NexusClient,
-) {
-    let game_meta = GameMetadata::get(&game.to_string(), false, store, client).unwrap();
-    println!(
-        "\n{} opinions for {}",
-        pluralize_mod(modlist.len()),
-        game_meta.name().yellow().bold()
-    );
-    // I think there's a split function I could use instead.
-    let abstained: Vec<&UserEndorsement> = modlist
-        .iter()
-        .filter(|m| matches!(m.status(), EndorsementStatus::Abstained))
-        .collect();
-    let endorsed: Vec<&UserEndorsement> = modlist
-        .iter()
-        .filter(|m| !matches!(m.status(), EndorsementStatus::Abstained))
-        .collect();
-
-    let mut emit_table = |list: Vec<&UserEndorsement>| {
-        let mut table = Table::new();
-        table.set_format(*prettytable::format::consts::FORMAT_CLEAN);
-        list.iter().for_each(|opinion| {
-            let key = CompoundKey::new(game.to_string(), opinion.mod_id());
-            if let Some(mod_info) = ModInfoFull::get(&key, false, store, client) {
-                table.add_row(row![
-                    format!("{}", opinion.status()),
-                    format!(
-                        "\x1b]8;;{}\x1b\\{}\x1b]8;;\x1b\\",
-                        opinion.url(),
-                        mod_info.display_name()
-                    ),
-                ]);
-            } else {
-                table.add_row(row![
-                    format!("{}", opinion.status()),
-                    format!(
-                        "\x1b]8;;{}\x1b\\uncached mod id #{}\x1b]8;;\x1b\\",
-                        opinion.url(),
-                        opinion.mod_id()
-                    ),
-                ]);
-            }
-        });
-        println!("{table}");
-    };
-
-    println!("endorsed {}:", pluralize_mod(endorsed.len()));
-    emit_table(endorsed);
-    println!("abstained on {}:", pluralize_mod(abstained.len()));
-    emit_table(abstained);
+        let nexus = nexus::NexusClient::new(nexuskey);
+        Mutex::new(nexus)
+    })
 }
 
 fn main() -> anyhow::Result<(), anyhow::Error> {
     dotenv().ok();
-    let nexuskey = std::env::var("NEXUS_API_KEY")
-        .expect("You must provide your personal Nexus API key in the env var NEXUS_API_KEY.");
     let flags = Flags::parse();
 
     loggerv::Logger::new()
@@ -310,222 +237,35 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
         .init()
         .unwrap();
 
-    let mut nexus = nexus::NexusClient::new(nexuskey);
-    let dbpath =
-        std::env::var("NEXUS_CACHE_PATH").unwrap_or_else(|_| "./db/nexus_cache.sled".to_string());
-    debug!("Storing data in {}", dbpath.bold());
-    let cfg = kv::Config::new(dbpath);
-    let store = kv::Store::new(cfg)?;
+    let mut nexus = nexus_client().lock().unwrap();
 
     match flags.cmd {
-        Command::Game { game } => {
-            if let Some(metadata) = GameMetadata::get(&game, flags.refresh, &store, &mut nexus) {
-                if flags.json {
-                    let pretty = serde_json::to_string_pretty(&metadata)?;
-                    println!("{}", pretty);
-                } else {
-                    metadata.emit_fancy(&store);
-
-                    let mods = metadata.mods(&store);
-                    println!(
-                        "There are {} mods in cache for this game.",
-                        mods.len().blue()
-                    );
-
-                    let tracked =
-                        Tracked::get(&Tracked::listkey(), flags.refresh, &store, &mut nexus);
-                    if let Some(tracked) = tracked {
-                        let filtered = tracked.by_game(&game);
-                        println!(
-                            "You are tracking {} mods for this game.",
-                            filtered.len().blue()
-                        );
-                    }
-                }
-            } else {
-                println!(
-                    "No game identified as {} found on the Nexus. Recheck the slug!",
-                    game.yellow().bold()
-                );
-            }
+        Command::Game { ref game } => {
+            handle_game(&flags, game, &mut nexus)?;
         }
-        Command::Mods { game } => {
-            if let Some(metadata) = GameMetadata::get(&game, flags.refresh, &store, &mut nexus) {
-                for m in metadata.mods(&store).into_iter() {
-                    if flags.json {
-                        let pretty = serde_json::to_string_pretty(&m)?;
-                        println!("{}", pretty);
-                    } else {
-                        println!("{}", m);
-                    }
-                }
-            } else {
-                println!(
-                    "No game identified as {} found on the Nexus. Recheck the slug!",
-                    game.yellow().bold()
-                );
-            }
+        Command::Mods { ref game } => {
+            handle_mods(&flags, game, &mut nexus)?;
         }
-        Command::ByName { name, game } => {
-            if let Some(metadata) = GameMetadata::get(&game, flags.refresh, &store, &mut nexus) {
-                for m in metadata.mods_name_match(&name, &store).into_iter() {
-                    if flags.json {
-                        let pretty = serde_json::to_string_pretty(&m)?;
-                        println!("{}", pretty);
-                    } else {
-                        println!("{}", m);
-                    }
-                }
-            } else {
-                println!(
-                    "No game identified as {} found on the Nexus. Recheck the slug!",
-                    game.yellow().bold()
-                );
-            }
+        Command::ByName { ref name, ref game } => {
+            search::by_name(&flags, game, name, &mut nexus)?;
         }
-        Command::Search { text, game } => {
-            if let Some(metadata) = GameMetadata::get(&game, flags.refresh, &store, &mut nexus) {
-                let mods = metadata.mods_match_text(&text, &store);
-                if flags.json {
-                    let pretty = serde_json::to_string_pretty(&mods)?;
-                    println!("{}", pretty);
-                } else {
-                    if mods.is_empty() {
-                        println!("\nNo mods found that match `{}`", text);
-                    } else if mods.len() == 1 {
-                        println!(
-                            "\nOne match found for `{}` in {}:\n",
-                            text,
-                            metadata.name().yellow().bold()
-                        );
-                    } else {
-                        println!(
-                            "\n{} matches found for `{}` in {}:\n",
-                            mods.len(),
-                            text,
-                            metadata.name().yellow().bold()
-                        );
-                    }
-
-                    for m in mods.into_iter() {
-                        println!("{}", m);
-                    }
-                }
-            } else {
-                println!(
-                    "No game identified as {} found on the Nexus. Recheck the slug!",
-                    game.yellow().bold()
-                );
-            }
+        Command::Search { ref text, ref game } => {
+            search::full_text(&flags, game, text, &mut nexus)?;
         }
-        Command::Hidden { game } => {
-            if let Some(metadata) = GameMetadata::get(&game, flags.refresh, &store, &mut nexus) {
-                let mut mods = metadata.mods_hidden(&store);
-                if let Some(all_tracked) =
-                    Tracked::get(&Tracked::listkey(), flags.refresh, &store, &mut nexus)
-                {
-                    // filter tracked mods from hidden
-                    let tracked: HashSet<u32> = all_tracked
-                        .by_game(&game)
-                        .iter()
-                        .map(|xs| xs.mod_id)
-                        .collect();
-                    mods.retain(|xs| tracked.contains(&xs.mod_id()));
-                }
-
-                if flags.json {
-                    let pretty = serde_json::to_string_pretty(&mods)?;
-                    println!("{}", pretty);
-                } else {
-                    if mods.is_empty() {
-                        println!(
-                            "\nNo hidden but tracked mods in cache for {}",
-                            metadata.name().yellow().bold()
-                        );
-                    } else if mods.len() == 1 {
-                        println!(
-                            "\nOne hidden but tracked mod in cache for {}:\n",
-                            metadata.name().yellow().bold()
-                        );
-                    } else {
-                        println!(
-                            "\n{} hidden but tracked mods in cache for {}:\n",
-                            mods.len(),
-                            metadata.name().yellow().bold()
-                        );
-                    }
-
-                    for m in mods.into_iter() {
-                        println!("{}", m.compact_info());
-                    }
-                }
-            } else {
-                println!(
-                    "No game identified as {} found on the Nexus. Recheck the slug!",
-                    game.yellow().bold()
-                );
-            }
+        Command::Hidden { ref game } => {
+            cleanup::hidden(&flags, game, &mut nexus)?;
         }
-        Command::Removed { game } => {
-            if let Some(metadata) = GameMetadata::get(&game, flags.refresh, &store, &mut nexus) {
-                let mods = metadata.mods_removed(&store);
-                if flags.json {
-                    let pretty = serde_json::to_string_pretty(&mods)?;
-                    println!("{}", pretty);
-                } else {
-                    if mods.is_empty() {
-                        println!(
-                            "\nNo removed mods in cache for {}",
-                            metadata.name().yellow().bold()
-                        );
-                    } else {
-                        println!("\nRemoved mods for {}:\n", metadata.name().yellow().bold());
-                    }
-
-                    for m in mods.into_iter() {
-                        println!("{}", m.compact_info());
-                    }
-                }
-            } else {
-                println!(
-                    "No game identified as {} found on the Nexus. Recheck the slug!",
-                    game.yellow().bold()
-                );
-            }
+        Command::Removed { ref game } => {
+            cleanup::removed(&flags, game, &mut nexus)?;
         }
-        Command::Wastebinned { game } => {
-            if let Some(metadata) = GameMetadata::get(&game, flags.refresh, &store, &mut nexus) {
-                let mods = metadata.mods_wastebinned(&store);
-                if flags.json {
-                    let pretty = serde_json::to_string_pretty(&mods)?;
-                    println!("{}", pretty);
-                } else {
-                    if mods.is_empty() {
-                        println!(
-                            "\nNo wastebinned mods in cache for {}",
-                            metadata.name().yellow().bold()
-                        );
-                    } else {
-                        println!(
-                            "\nWastebinned mods for {}:\n",
-                            metadata.name().yellow().bold()
-                        );
-                    }
-
-                    for m in mods.into_iter() {
-                        println!("{}\n{}\n", m.compact_info(), m.url());
-                    }
-                }
-            } else {
-                println!(
-                    "No game identified as {} found on the Nexus. Recheck the slug!",
-                    game.yellow().bold()
-                );
-            }
+        Command::Wastebinned { ref game } => {
+            cleanup::wastebinned(&flags, game, &mut nexus)?;
         }
         Command::Mod { game, mod_id } => {
+            let store = store();
+
             let key = CompoundKey::new(game, mod_id);
-            if let Some(modinfo) = ModInfoFull::get(&key, flags.refresh, &store, &mut nexus) {
+            if let Some(modinfo) = ModInfoFull::get(&key, flags.refresh, store, &mut nexus) {
                 if flags.json {
                     let pretty = serde_json::to_string_pretty(&modinfo)?;
                     println!("{}", pretty);
@@ -534,166 +274,14 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                 }
             }
         }
-        Command::Populate { game, limit } => {
-            let gamemeta = GameMetadata::get(&game, flags.refresh, &store, &mut nexus);
-            if gamemeta.is_none() {
-                warn!("{} can't be found on the Nexus! Bailing.", game);
-                return Ok(());
-            }
-
-            let tracked = Tracked::get(&Tracked::listkey(), flags.refresh, &store, &mut nexus);
-            if tracked.is_none() {
-                anyhow::bail!("Unable to fetch any tracked mods.");
-            }
-            let tracked = tracked.unwrap();
-            let filtered = tracked.by_game(&game);
-            println!(
-                "You are tracking {} mods total and {} for this game.",
-                tracked.mods.len().blue(),
-                filtered.len().blue()
-            );
-
-            println!(
-                "Now iterating tracked mods, caching the first {} uncached found",
-                limit
-            );
-
-            let mut mod_iter = filtered.iter();
-            let mut item = mod_iter.next();
-            let mut fetches: u16 = 0;
-
-            while item.is_some() {
-                let modinfo = item.unwrap();
-                let key = CompoundKey::new(modinfo.domain_name.clone(), modinfo.mod_id);
-                // Find the next uncached mod.
-                let maybe_mod = if local::<ModInfoFull, CompoundKey>(&key, &store).is_some() {
-                    None
-                } else if let Some(m) = ModInfoFull::fetch(&key, &mut nexus, None) {
-                    m.store(&store)?;
-                    fetches += 1;
-                    Some(m)
-                } else {
-                    info!(
-                        "   ! unable to find {}/{} for caching",
-                        modinfo.domain_name,
-                        modinfo.mod_id.red()
-                    );
-                    None
-                };
-
-                if let Some(fullmod) = maybe_mod {
-                    println!("   {} -> cache", fullmod.compact_info());
-                }
-
-                if fetches < limit {
-                    item = mod_iter.next();
-                } else {
-                    item = None;
-                }
-            }
+        Command::Populate { ref game, limit } => {
+            handle_populate(&flags, game, limit, &mut nexus)?;
         }
         Command::Validate => {
-            if let Some(user) = AuthenticatedUser::fetch(&"ignored", &mut nexus, None) {
-                if flags.json {
-                    let pretty = serde_json::to_string_pretty(&user)?;
-                    println!("{}", pretty);
-                } else {
-                    println!("You are logged in as:\n{}", user);
-                    println!(
-                        "\nYou have {} requests remaining this hour and {} for today.",
-                        nexus.remaining_hour().bold(),
-                        nexus.remaining_day().bold()
-                    );
-                }
-            } else {
-                warn!("Something went wrong validating your API key.")
-            }
+            handle_validate(&flags, &mut nexus)?;
         }
-        Command::Tracked { game } => {
-            let maybe = Tracked::get(&Tracked::listkey(), flags.refresh, &store, &mut nexus);
-
-            if let Some(tracked) = maybe {
-                if flags.json {
-                    let pretty = serde_json::to_string_pretty(&tracked)?;
-                    println!("{}", pretty);
-                } else if game.is_none() {
-                    println!("{}", tracked);
-                } else {
-                    let game = game.unwrap();
-                    let filtered = tracked.by_game(&game);
-                    if filtered.is_empty() {
-                        println!("You aren't tracking any mods for {}", game.yellow().bold());
-                    } else {
-                        let mut game_meta =
-                            GameMetadata::get(&game, flags.refresh, &store, &mut nexus).unwrap();
-                        // bucket mods by category, treating removed and wastebinned mods separately.
-                        let mut uncached = 0;
-                        // I note that this list of special-cases is looking very pattern-like.
-                        let mut wasted: Vec<ModInfoFull> = Vec::new();
-                        let mut removed: Vec<ModInfoFull> = Vec::new();
-                        let mut moderated: Vec<ModInfoFull> = Vec::new();
-                        let mut cat_map: HashMap<u16, Vec<ModInfoFull>> = HashMap::new();
-                        filtered.iter().for_each(|m| {
-                            let key = CompoundKey::new(game.clone(), m.mod_id);
-                            if let Some(mod_info) = local::<ModInfoFull, CompoundKey>(&key, &store)
-                            {
-                                let bucket = cat_map
-                                    .entry(mod_info.category_id())
-                                    .or_insert_with(Vec::new);
-                                match mod_info.status() {
-                                    ModStatus::Wastebinned => {
-                                        wasted.push(*mod_info);
-                                    }
-                                    ModStatus::Removed => {
-                                        removed.push(*mod_info);
-                                    }
-                                    ModStatus::UnderModeration => {
-                                        moderated.push(*mod_info);
-                                    }
-                                    _ => {
-                                        bucket.push(*mod_info);
-                                    }
-                                }
-                            } else {
-                                uncached += 1
-                            }
-                        });
-
-                        for (catid, mods) in cat_map.into_iter().sorted_by_key(|xs| xs.0) {
-                            if let Some(category) = game_meta.category_from_id(catid) {
-                                println!("----- {}:", category.name().purple());
-                            } else {
-                                println!("----- category id #{}:", catid.blue());
-                            }
-
-                            mods.iter()
-                                .sorted_by_key(|xs| xs.mod_id())
-                                .for_each(|mod_info| {
-                                    println!("    {}", mod_info.compact_info());
-                                });
-                        }
-
-                        println!(
-                            "\nYou are tracking {} for {}.",
-                            pluralize_mod(filtered.len()),
-                            game_meta.name().yellow().bold()
-                        );
-                        if uncached == 0 {
-                            println!("All {} are in cache.", pluralize_mod(filtered.len()));
-                        } else {
-                            println!("{} are in cache.", pluralize_mod(filtered.len() - uncached));
-                            println!("Another {} not yet cached.", pluralize_mod(uncached));
-                        }
-                        println!();
-
-                        emit_modlist_with_caption(removed, "removed");
-                        emit_modlist_with_caption(wasted, "wastebinned by their authors");
-                        emit_modlist_with_caption(moderated, "under moderation");
-                    }
-                }
-            } else {
-                error!("Something went wrong fetching tracked mods. Rerun with -v to get more details.");
-            }
+        Command::Tracked { ref game } => {
+            handle_tracked(&flags, game, &mut nexus)?;
         }
         Command::Track { game, mod_id } => match nexus.track(&game, mod_id) {
             Ok(message) => {
@@ -721,47 +309,20 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                 }
             }
         }
-        Command::UntrackRemoved { game } => {
-            if let Some(metadata) = GameMetadata::get(&game, flags.refresh, &store, &mut nexus) {
-                let maybe = Tracked::get(&Tracked::listkey(), flags.refresh, &store, &mut nexus);
-                if let Some(all_tracked) = maybe {
-                    let tracked: HashSet<u32> = all_tracked
-                        .by_game(&game)
-                        .iter()
-                        .map(|xs| xs.mod_id)
-                        .collect();
-                    let mods = metadata.mods_removed(&store);
-                    for m in mods.into_iter() {
-                        // we minimize api calls to the nexus
-                        if tracked.contains(&m.mod_id()) {
-                            match nexus.untrack(&game, m.mod_id()) {
-                                Ok(_) => {
-                                    println!("untracked {}", m.mod_id().red());
-                                }
-                                Err(e) => {
-                                    println!("Error untracking {}:\n{:?}", m.mod_id(), e);
-                                }
-                            }
-                        }
-                    }
-                }
-            } else {
-                println!(
-                    "No game identified as {} found on the Nexus. Recheck the slug!",
-                    game.yellow().bold()
-                );
-            }
+        Command::UntrackRemoved { ref game } => {
+            cleanup::untrack_removed(&flags, game, &mut nexus)?;
         }
         Command::Changelogs { game, mod_id } => {
+            let store = store();
             let key = CompoundKey::new(game.clone(), mod_id);
-            let maybe = Changelogs::get(&key, flags.refresh, &store, &mut nexus);
+            let maybe = Changelogs::get(&key, flags.refresh, store, &mut nexus);
             if let Some(changelogs) = maybe {
                 if flags.json {
                     let pretty = serde_json::to_string_pretty(&changelogs)?;
                     println!("{}", pretty);
                     return Ok(());
                 }
-                if let Some(mod_info) = ModInfoFull::get(&key, false, &store, &mut nexus) {
+                if let Some(mod_info) = ModInfoFull::get(&key, false, store, &mut nexus) {
                     println!(
                         "\nchangelogs for \x1b]8;;{}\x1b\\{}\x1b]8;;\x1b\\",
                         mod_info.url(),
@@ -779,8 +340,10 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
             }
         }
         Command::Files { game, mod_id } => {
+            let store = store();
+
             let key = CompoundKey::new(game, mod_id);
-            let maybe = Files::get(&key, flags.refresh, &store, &mut nexus);
+            let maybe = Files::get(&key, flags.refresh, store, &mut nexus);
             if let Some(files) = maybe {
                 let pretty = serde_json::to_string_pretty(&files)?;
                 println!("{}", pretty);
@@ -789,41 +352,8 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                 println!("Nothing found.");
             }
         }
-        Command::Endorsements { game } => {
-            let maybe = EndorsementList::get(
-                &EndorsementList::listkey(),
-                flags.refresh,
-                &store,
-                &mut nexus,
-            );
-
-            if let Some(opinions) = maybe {
-                if flags.json {
-                    let pretty = serde_json::to_string_pretty(&opinions)?;
-                    println!("{}", pretty);
-                    return Ok(());
-                }
-
-                let mapping = opinions.get_game_map();
-                if let Some(g) = game {
-                    if let Some(modlist) = mapping.get(&g) {
-                        show_endorsements(&g, modlist, &store, &mut nexus);
-                    } else {
-                        println!("No opinions expressed on mods for {}.", g);
-                    }
-                } else {
-                    println!(
-                        "\n{} mods opinionated upon for {} games\n",
-                        opinions.mods.len().red(),
-                        mapping.len().blue()
-                    );
-                    for (game, modlist) in mapping.iter() {
-                        show_endorsements(game, modlist, &store, &mut nexus);
-                    }
-                }
-            } else {
-                error!("Something went wrong fetching endorsements. Rerun with -v to get more details.");
-            }
+        Command::Endorsements { ref game } => {
+            handle_endorsements(&flags, game, &mut nexus)?;
         }
         Command::Endorse { game, ids } => {
             for mod_id in ids.iter() {
@@ -865,11 +395,12 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                 return Ok(());
             }
 
+            let store = store();
             for item in res.mods.into_iter() {
                 println!("{}", item);
                 // never waste an opportunity to cache!
-                if item.store(&store).is_err() {
-                    error!("storing mod failed...");
+                if item.store(store).is_err() {
+                    log::error!("storing mod failed...");
                 };
             }
         }
@@ -880,11 +411,13 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                 println!("{}", pretty);
                 return Ok(());
             }
+            let store = store();
+
             for item in res.mods.into_iter() {
                 if item.available() {
                     println!("{}", item);
-                    if item.store(&store).is_err() {
-                        error!("storing mod failed...");
+                    if item.store(store).is_err() {
+                        log::error!("storing mod failed...");
                     };
                 }
             }
@@ -896,10 +429,12 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                 println!("{}", pretty);
                 return Ok(());
             }
+            let store = store();
+
             for item in res.mods.into_iter() {
                 println!("{}", item);
-                if item.store(&store).is_err() {
-                    error!("storing mod failed...");
+                if item.store(store).is_err() {
+                    log::error!("storing mod failed...");
                 };
             }
         }
