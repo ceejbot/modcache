@@ -129,7 +129,6 @@ impl GameMetadata {
 
     /// Get all mods cached for this game.
     pub fn mods(&self, db: &kv::Store) -> Vec<ModInfoFull> {
-        // TODO sorting
         let prefix = format!("{}/", &self.domain_name);
         ModInfoFull::by_prefix(&prefix, db)
             .into_iter()

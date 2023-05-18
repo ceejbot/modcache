@@ -137,11 +137,7 @@ impl Cacheable<&str> for EndorsementList {
         super::get::<Self, &str>(key, refresh, db, nexus)
     }
 
-    fn fetch(
-        _key: &&str,
-        nexus: &mut NexusClient,
-        etag: Option<String>,
-    ) -> Option<Box<Self>> {
+    fn fetch(_key: &&str, nexus: &mut NexusClient, etag: Option<String>) -> Option<Box<Self>> {
         nexus.endorsements(etag).map(Box::new)
     }
 

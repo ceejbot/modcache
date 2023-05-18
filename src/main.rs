@@ -34,7 +34,7 @@ pub struct Flags {
         action = clap::ArgAction::Count,
         help = "Pass -v or -vv to increase verbosity"
     )]
-    verbose: u64,
+    verbose: u8,
     #[clap(
         short,
         long,
@@ -303,7 +303,7 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
     let flags = Flags::parse();
 
     loggerv::Logger::new()
-        .verbosity(flags.verbose)
+        .verbosity(flags.verbose as u64)
         .line_numbers(false)
         .module_path(false)
         .colors(true)
@@ -325,6 +325,22 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                     println!("{}", pretty);
                 } else {
                     metadata.emit_fancy(&store);
+
+                    let mods = metadata.mods(&store);
+                    println!(
+                        "There are {} mods in cache for this game.",
+                        mods.len().blue()
+                    );
+
+                    let tracked =
+                        Tracked::get(&Tracked::listkey(), flags.refresh, &store, &mut nexus);
+                    if let Some(tracked) = tracked {
+                        let filtered = tracked.by_game(&game);
+                        println!(
+                            "You are tracking {} mods for this game.",
+                            filtered.len().blue()
+                        );
+                    }
                 }
             } else {
                 println!(
@@ -619,8 +635,7 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                         let mut cat_map: HashMap<u16, Vec<ModInfoFull>> = HashMap::new();
                         filtered.iter().for_each(|m| {
                             let key = CompoundKey::new(game.clone(), m.mod_id);
-                            if let Some(mod_info) =
-                                local::<ModInfoFull, CompoundKey>(&key, &store)
+                            if let Some(mod_info) = local::<ModInfoFull, CompoundKey>(&key, &store)
                             {
                                 let bucket = cat_map
                                     .entry(mod_info.category_id())
