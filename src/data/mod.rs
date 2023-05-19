@@ -103,14 +103,14 @@ where
     fn bucket_name() -> &'static str;
     /// Get an item of this type, looking in local storage first then fetching from the Nexus if it
     /// isn't found locally. Set `refresh` to true to do a conditional GET to the Nexus for updated
-    /// data even if we have a local hit.
+    /// data even if we have a local hit. All implementations just call the parametrized get.
     fn get(
         key: &Self::K,
         refresh: bool,
         db: &kv::Store,
         nexus: &mut NexusClient,
     ) -> Option<Box<Self>>;
-    /// Fetch an item from the Nexus by key.
+    /// Fetch an item from the Nexus by key. Each data type has a unique endpoint.
     fn fetch(key: &Self::K, nexus: &mut NexusClient, etag: Option<String>) -> Option<Box<Self>>;
     /// Get this item's key
     fn key(&self) -> Self::K;
@@ -120,7 +120,8 @@ where
     fn set_etag(&mut self, etag: &str);
     /// Store this item in local cache.
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize>;
-    /// Merge properties, if wanted, before storing an updated version of this object.
+    /// Merge properties, if wanted, before storing an updated version of this object. Only one data
+    /// type needs this ability.
     fn update(&self, other: &Self) -> Self;
 }
 
