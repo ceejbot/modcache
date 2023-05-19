@@ -206,7 +206,9 @@ impl GameMetadata {
     }
 }
 
-impl Cacheable<String> for GameMetadata {
+impl Cacheable for GameMetadata {
+    type K = String;
+
     fn bucket_name() -> &'static str {
         "games"
     }
@@ -217,7 +219,7 @@ impl Cacheable<String> for GameMetadata {
         store: &kv::Store,
         nexus: &mut NexusClient,
     ) -> Option<Box<Self>> {
-        super::get::<Self, String>(key, refresh, store, nexus)
+        super::get::<Self>(key, refresh, store, nexus)
     }
 
     fn fetch(key: &String, nexus: &mut NexusClient, etag: Option<String>) -> Option<Box<Self>> {
@@ -237,7 +239,7 @@ impl Cacheable<String> for GameMetadata {
     }
 
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
-        let bucket = super::bucket::<Self, String>(db).unwrap();
+        let bucket = super::bucket::<Self>(db).unwrap();
         bucket.set(&&*self.domain_name, &Json(self.clone()))?;
         bucket.flush()?;
         Ok(1)

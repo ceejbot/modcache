@@ -46,7 +46,7 @@ pub fn handle(
         let modinfo = item.unwrap();
         let key = CompoundKey::new(modinfo.domain_name.clone(), modinfo.mod_id);
         // Find the next uncached mod.
-        let maybe_mod = if local::<ModInfoFull, CompoundKey>(&key, store).is_some() {
+        let maybe_mod = if local::<ModInfoFull>(&key, store).is_some() {
             None
         } else if let Some(m) = ModInfoFull::fetch(&key, nexus, None) {
             m.store(store)?;

@@ -38,7 +38,9 @@ impl Default for AuthenticatedUser {
     }
 }
 
-impl Cacheable<&str> for AuthenticatedUser {
+impl Cacheable for AuthenticatedUser {
+    type K = &'static str;
+
     fn bucket_name() -> &'static str {
         "authed_users"
     }
@@ -82,7 +84,7 @@ impl Cacheable<&str> for AuthenticatedUser {
     }
 
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
-        let bucket = super::bucket::<Self, &str>(db).unwrap();
+        let bucket = super::bucket::<Self>(db).unwrap();
         bucket.set(&self.key(), &Json(self.clone()))?;
         bucket.flush()?;
         Ok(1)

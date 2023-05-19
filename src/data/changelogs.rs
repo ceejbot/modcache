@@ -42,7 +42,9 @@ impl Display for Changelogs {
     }
 }
 
-impl Cacheable<CompoundKey> for Changelogs {
+impl Cacheable for Changelogs {
+    type K = CompoundKey;
+
     fn bucket_name() -> &'static str {
         "changelogs"
     }
@@ -68,7 +70,7 @@ impl Cacheable<CompoundKey> for Changelogs {
         db: &kv::Store,
         nexus: &mut NexusClient,
     ) -> Option<Box<Self>> {
-        super::get::<Self, CompoundKey>(key, refresh, db, nexus)
+        super::get::<Self>(key, refresh, db, nexus)
     }
 
     fn fetch(
@@ -87,7 +89,7 @@ impl Cacheable<CompoundKey> for Changelogs {
     }
 
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
-        let bucket = super::bucket::<Self, CompoundKey>(db).unwrap();
+        let bucket = super::bucket::<Self>(db).unwrap();
         if bucket
             .set(&&*self.key().to_string(), &Json(self.clone()))
             .is_ok()

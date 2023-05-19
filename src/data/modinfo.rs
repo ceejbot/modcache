@@ -123,7 +123,7 @@ pub struct ModInfoFull {
 
 impl ModInfoFull {
     pub fn by_prefix(prefix: &str, db: &kv::Store) -> Vec<Self> {
-        let bucket = super::bucket::<Self, CompoundKey>(db).unwrap();
+        let bucket = super::bucket::<Self>(db).unwrap();
 
         let mut result: Vec<Self> = Vec::new();
         if let Ok(prefixes) = bucket.iter_prefix(&prefix) {
@@ -287,7 +287,9 @@ impl Display for ModInfoFull {
     }
 }
 
-impl Cacheable<CompoundKey> for ModInfoFull {
+impl Cacheable for ModInfoFull {
+    type K = CompoundKey;
+
     fn bucket_name() -> &'static str {
         "mods"
     }
@@ -298,7 +300,7 @@ impl Cacheable<CompoundKey> for ModInfoFull {
         db: &kv::Store,
         nexus: &mut NexusClient,
     ) -> Option<Box<Self>> {
-        super::get::<Self, CompoundKey>(key, refresh, db, nexus)
+        super::get::<Self>(key, refresh, db, nexus)
     }
 
     fn fetch(
@@ -327,7 +329,7 @@ impl Cacheable<CompoundKey> for ModInfoFull {
     }
 
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
-        let bucket = super::bucket::<Self, CompoundKey>(db).unwrap();
+        let bucket = super::bucket::<Self>(db).unwrap();
         bucket.set(&&*self.key().to_string(), &Json(self.clone()))?;
         bucket.flush()?;
         Ok(1)

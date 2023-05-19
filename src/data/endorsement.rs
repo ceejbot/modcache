@@ -124,21 +124,27 @@ impl Display for EndorsementList {
     }
 }
 
-impl Cacheable<&str> for EndorsementList {
+impl Cacheable for EndorsementList {
+    type K = &'static str;
+
     fn bucket_name() -> &'static str {
         "endorsements"
     }
 
     fn get(
-        key: &&str,
+        key: &&'static str,
         refresh: bool,
         db: &kv::Store,
         nexus: &mut NexusClient,
     ) -> Option<Box<Self>> {
-        super::get::<Self, &str>(key, refresh, db, nexus)
+        super::get::<Self>(key, refresh, db, nexus)
     }
 
-    fn fetch(_key: &&str, nexus: &mut NexusClient, etag: Option<String>) -> Option<Box<Self>> {
+    fn fetch(
+        _key: &&'static str,
+        nexus: &mut NexusClient,
+        etag: Option<String>,
+    ) -> Option<Box<Self>> {
         nexus.endorsements(etag).map(Box::new)
     }
 
@@ -155,7 +161,7 @@ impl Cacheable<&str> for EndorsementList {
     }
 
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
-        let bucket = super::bucket::<Self, &str>(db).unwrap();
+        let bucket = super::bucket::<Self>(db).unwrap();
         bucket.set(&self.key(), &Json(self.clone()))?;
         bucket.flush()?;
         Ok(1)

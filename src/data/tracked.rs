@@ -79,18 +79,20 @@ impl Display for Tracked {
     }
 }
 
-impl Cacheable<&str> for Tracked {
+impl Cacheable for Tracked {
+    type K = &'static str;
+
     fn bucket_name() -> &'static str {
         "mod_ref_lists"
     }
 
     fn get(
-        key: &&str,
+        _key: &&str,
         refresh: bool,
         db: &kv::Store,
         nexus: &mut NexusClient,
     ) -> Option<Box<Self>> {
-        super::get::<Self, &str>(key, refresh, db, nexus)
+        super::get::<Self>(&"tracked", refresh, db, nexus)
     }
 
     fn fetch(_key: &&str, nexus: &mut NexusClient, etag: Option<String>) -> Option<Box<Self>> {
@@ -110,7 +112,7 @@ impl Cacheable<&str> for Tracked {
     }
 
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
-        let bucket = super::bucket::<Self, &str>(db).unwrap();
+        let bucket = super::bucket::<Self>(db).unwrap();
         bucket.set(&self.key(), &Json(self.clone()))?;
         bucket.flush()?;
         Ok(1)

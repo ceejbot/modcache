@@ -46,7 +46,7 @@ pub fn handle(flags: &Flags, game: &Option<String>, nexus: &mut NexusClient) -> 
     let mut cat_map: HashMap<u16, Vec<ModInfoFull>> = HashMap::new();
     filtered.iter().for_each(|m| {
         let key = CompoundKey::new(game.clone(), m.mod_id);
-        if let Some(mod_info) = local::<ModInfoFull, CompoundKey>(&key, store) {
+        if let Some(mod_info) = local::<ModInfoFull>(&key, store) {
             let bucket = cat_map
                 .entry(mod_info.category_id())
                 .or_insert_with(Vec::new);
