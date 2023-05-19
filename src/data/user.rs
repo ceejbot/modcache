@@ -1,10 +1,10 @@
+use std::collections::HashMap;
+use std::fmt::Display;
+
 use kv::Json;
 use log::{info, warn};
 use owo_colors::OwoColorize;
 use serde::{Deserialize, Serialize};
-
-use std::collections::HashMap;
-use std::fmt::Display;
 
 use crate::nexus::NexusClient;
 use crate::Cacheable;
@@ -83,11 +83,9 @@ impl Cacheable<&str> for AuthenticatedUser {
 
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
         let bucket = super::bucket::<Self, &str>(db).unwrap();
-        if bucket.set(&self.key(), &Json(self.clone())).is_ok() {
-            Ok(1)
-        } else {
-            Ok(0)
-        }
+        bucket.set(&self.key(), &Json(self.clone()))?;
+        bucket.flush()?;
+        Ok(1)
     }
 
     fn update(&self, other: &Self) -> Self {

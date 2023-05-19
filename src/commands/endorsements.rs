@@ -1,15 +1,13 @@
 use owo_colors::OwoColorize;
 use prettytable::{row, Table};
 
-use crate::{
-    data::{
-        modinfo::ModInfoFull, Cacheable, CompoundKey, EndorsementList, EndorsementStatus,
-        GameMetadata, UserEndorsement,
-    },
-    formatting::pluralize_mod,
-    nexus::NexusClient,
-    Flags,
+use crate::data::modinfo::ModInfoFull;
+use crate::data::{
+    Cacheable, CompoundKey, EndorsementList, EndorsementStatus, GameMetadata, UserEndorsement,
 };
+use crate::formatting::pluralize_mod;
+use crate::nexus::NexusClient;
+use crate::Flags;
 
 /// Display mod endorsements for a specific game, sorted by status.
 fn show_endorsements(
@@ -21,7 +19,7 @@ fn show_endorsements(
     let game_meta = GameMetadata::get(&game.to_string(), false, store, client).unwrap();
     println!(
         "\n{} opinions for {}",
-        pluralize_mod(modlist.len()),
+        modlist.len().blue(),
         game_meta.name().yellow().bold()
     );
     // I think there's a split function I could use instead.
@@ -92,8 +90,8 @@ pub fn handle(flags: &Flags, game: &Option<String>, nexus: &mut NexusClient) -> 
             println!("{}", pretty);
         } else {
             println!(
-                "\n{} mods opinionated upon for {} games\n",
-                opinions.mods.len().red(),
+                "\n{} opinionated upon for {} games\n",
+                pluralize_mod(opinions.mods.len()),
                 mapping.len().blue()
             );
             for (game, modlist) in mapping.iter() {

@@ -1,3 +1,4 @@
+use num_format::{Locale, ToFormattedString};
 use owo_colors::OwoColorize;
 use term_grid::{Cell, Direction, Filling, Grid, GridOptions};
 use terminal_size::*;
@@ -32,7 +33,7 @@ pub fn pluralize_mod(count: usize) -> String {
     if count == 1 {
         format!("{} mod", "one".blue())
     } else {
-        format!("{} mods", count.blue())
+        format!("{} mods", count.to_formatted_string(&Locale::en).blue())
     }
 }
 

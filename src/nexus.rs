@@ -1,9 +1,9 @@
+use std::time::Duration;
+use std::u16;
+
 use chrono::{DateTime, Utc};
 use owo_colors::OwoColorize;
 use serde::Deserialize;
-
-use std::time::Duration;
-use std::u16;
 
 use crate::data::*;
 

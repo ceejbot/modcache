@@ -1,13 +1,11 @@
 use owo_colors::OwoColorize;
 
-use crate::data::local;
 use crate::data::modinfo::ModInfoFull;
 use crate::data::tracked::Tracked;
-use crate::data::Cacheable;
-use crate::data::CompoundKey;
+use crate::data::{local, Cacheable, CompoundKey};
+use crate::formatting::pluralize_mod;
 use crate::nexus::NexusClient;
-use crate::Flags;
-use crate::GameMetadata;
+use crate::{Flags, GameMetadata};
 
 pub fn handle(
     flags: &Flags,
@@ -30,8 +28,8 @@ pub fn handle(
     let tracked = tracked.unwrap();
     let filtered = tracked.by_game(game);
     println!(
-        "You are tracking {} mods total and {} for this game.",
-        tracked.mods.len().blue(),
+        "You are tracking {} total and {} for this game.",
+        pluralize_mod(tracked.mods.len()),
         filtered.len().blue()
     );
 

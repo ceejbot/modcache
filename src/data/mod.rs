@@ -35,7 +35,7 @@ impl StoredData {
     /// Set refresh to true if you want to check the Nexus even if you have a cache hit.
     pub fn get<T, K>(&mut self, key: &K, refresh: bool) -> Option<Box<T>>
     where
-        T: Cacheable<K>,
+        T: Cacheable<K> + Debug,
         K: Debug + Clone + Display + Into<String>,
     {
         if let Some(found) = local::<T, K>(key, &self.db) {
@@ -45,8 +45,13 @@ impl StoredData {
                 {
                     log::info!("    ↪ refreshed nexus data");
                     let merged = found.update(&fetched);
-                    if merged.store(&self.db).is_ok() {
-                        log::info!("    ✓ cached nexus data");
+                    match merged.store(&self.db) {
+                        Ok(_) => {
+                            log::info!("    ✓ cached nexus data");
+                        }
+                        Err(e) => {
+                            log::warn!("Failed to store refreshed object! {e:?}");
+                        }
                     }
                     Some(Box::new(merged))
                 } else {
@@ -99,7 +104,7 @@ impl StoredData {
 /// Set refresh to true if you want to check the Nexus even if you have a cache hit.
 pub fn get<T, K>(key: &K, refresh: bool, db: &kv::Store, nexus: &mut NexusClient) -> Option<Box<T>>
 where
-    T: Cacheable<K>,
+    T: Cacheable<K> + Debug,
     K: Debug + Clone + Display + Into<String>,
 {
     if let Some(found) = local::<T, K>(key, db) {
@@ -107,8 +112,13 @@ where
             if let Some(fetched) = T::fetch(key, nexus, Some(found.etag().to_string())) {
                 log::info!("    ↪ refreshed nexus data");
                 let merged = found.update(&fetched);
-                if merged.store(db).is_ok() {
-                    log::info!("    ✓ cached nexus data");
+                match merged.store(db) {
+                    Ok(_) => {
+                        log::info!("    ✓ cached nexus data");
+                    }
+                    Err(e) => {
+                        log::warn!("Failed to store refreshed object! {e:?}");
+                    }
                 }
                 Some(Box::new(merged))
             } else {

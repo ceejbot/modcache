@@ -3,16 +3,12 @@ use std::collections::HashMap;
 use itertools::Itertools;
 use owo_colors::OwoColorize;
 
-use crate::data::local;
-use crate::data::modinfo::ModInfoFull;
-use crate::data::modinfo::ModStatus;
+use crate::data::modinfo::{ModInfoFull, ModStatus};
 use crate::data::tracked::Tracked;
-use crate::data::Cacheable;
-use crate::data::CompoundKey;
+use crate::data::{local, Cacheable, CompoundKey};
 use crate::formatting::{emit_modlist_with_caption, pluralize_mod};
 use crate::nexus::NexusClient;
-use crate::Flags;
-use crate::GameMetadata;
+use crate::{Flags, GameMetadata};
 
 pub fn handle(flags: &Flags, game: &Option<String>, nexus: &mut NexusClient) -> anyhow::Result<()> {
     let store = crate::store();

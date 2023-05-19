@@ -1,10 +1,10 @@
 // All structs and trait impls supporting the full mod info response from the Nexus.
 
-use kv::Json;
-use serde::{Deserialize, Serialize};
-
 use std::collections::HashMap;
 use std::fmt::Display;
+
+use kv::Json;
+use serde::{Deserialize, Serialize};
 
 use crate::nexus::NexusClient;
 use crate::{Cacheable, CompoundKey};

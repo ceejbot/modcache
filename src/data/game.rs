@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+use std::fmt::Display;
+
 use itertools::Itertools;
 use kv::Json;
 use num_format::{Locale, ToFormattedString};
@@ -5,9 +8,6 @@ use owo_colors::OwoColorize;
 use regex::RegexBuilder;
 use serde::{Deserialize, Serialize};
 use unicase::UniCase;
-
-use std::collections::HashMap;
-use std::fmt::Display;
 
 use super::{Cacheable, ModInfoFull, ModStatus};
 use crate::nexus::NexusClient;
@@ -238,11 +238,9 @@ impl Cacheable<String> for GameMetadata {
 
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
         let bucket = super::bucket::<Self, String>(db).unwrap();
-        if bucket.set(&&*self.domain_name, &Json(self.clone())).is_ok() {
-            Ok(1)
-        } else {
-            Ok(0)
-        }
+        bucket.set(&&*self.domain_name, &Json(self.clone()))?;
+        bucket.flush()?;
+        Ok(1)
     }
 
     fn update(&self, other: &Self) -> Self {

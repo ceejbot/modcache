@@ -1,12 +1,12 @@
 // All structs and trait impls supporting the full mod info response from the Nexus.
 
+use std::fmt::Display;
+
 use chrono::{DateTime, Utc};
 use kv::{Codec, Json};
 use owo_colors::OwoColorize;
 use serde::{Deserialize, Serialize};
 use terminal_size::*;
-
-use std::fmt::Display;
 
 use crate::nexus::NexusClient;
 use crate::{Cacheable, CompoundKey, EndorsementStatus};
@@ -67,6 +67,19 @@ pub enum ModStatus {
     Removed,
     UnderModeration,
     Wastebinned,
+}
+
+impl Display for ModStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ModStatus::Hidden => write!(f, "hidden"),
+            ModStatus::NotPublished => write!(f, "not published"),
+            ModStatus::Published => write!(f, "published"),
+            ModStatus::Removed => write!(f, "removed"),
+            ModStatus::UnderModeration => write!(f, "under moderation"),
+            ModStatus::Wastebinned => write!(f, "wastebinned"),
+        }
+    }
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -315,14 +328,9 @@ impl Cacheable<CompoundKey> for ModInfoFull {
 
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
         let bucket = super::bucket::<Self, CompoundKey>(db).unwrap();
-        if bucket
-            .set(&&*self.key().to_string(), &Json(self.clone()))
-            .is_ok()
-        {
-            Ok(1)
-        } else {
-            Ok(0)
-        }
+        bucket.set(&&*self.key().to_string(), &Json(self.clone()))?;
+        bucket.flush()?;
+        Ok(1)
     }
 
     fn update(&self, other: &Self) -> Self {

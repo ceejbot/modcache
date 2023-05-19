@@ -2,8 +2,7 @@ use owo_colors::OwoColorize;
 
 use crate::data::Cacheable;
 use crate::nexus::NexusClient;
-use crate::Flags;
-use crate::GameMetadata;
+use crate::{Flags, GameMetadata};
 
 pub fn handle(flags: &Flags, game: &String, nexus: &mut NexusClient) -> anyhow::Result<()> {
     let store = crate::store();

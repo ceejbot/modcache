@@ -1,10 +1,9 @@
 use owo_colors::OwoColorize;
 
 use crate::data::Cacheable;
+use crate::formatting::pluralize_mod;
 use crate::nexus::NexusClient;
-use crate::Flags;
-use crate::GameMetadata;
-use crate::Tracked;
+use crate::{Flags, GameMetadata, Tracked};
 
 pub fn handle(flags: &Flags, game: &String, nexus: &mut NexusClient) -> anyhow::Result<()> {
     let store = crate::store();
@@ -18,16 +17,16 @@ pub fn handle(flags: &Flags, game: &String, nexus: &mut NexusClient) -> anyhow::
 
             let mods = metadata.mods(store);
             println!(
-                "There are {} mods in cache for this game.",
-                mods.len().blue()
+                "There are {} in cache for this game.",
+                pluralize_mod(mods.len())
             );
 
             let tracked = Tracked::get(&Tracked::listkey(), flags.refresh, store, nexus);
             if let Some(tracked) = tracked {
                 let filtered = tracked.by_game(game);
                 println!(
-                    "You are tracking {} mods for this game.",
-                    filtered.len().blue()
+                    "You are tracking {} for this game.",
+                    pluralize_mod(filtered.len())
                 );
             }
         }

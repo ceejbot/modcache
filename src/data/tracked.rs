@@ -1,12 +1,13 @@
+use std::collections::HashMap;
+use std::fmt::Display;
+
 use kv::Json;
 use owo_colors::OwoColorize;
 use prettytable::{row, Table};
 use serde::{Deserialize, Serialize};
 
-use std::collections::HashMap;
-use std::fmt::Display;
-
 use super::Cacheable;
+use crate::formatting::pluralize_mod;
 use crate::nexus::NexusClient;
 
 // Store and retrieve the tracked mods list.
@@ -64,8 +65,8 @@ impl Display for Tracked {
         let mapping = self.get_game_map();
         writeln!(
             f,
-            "\n{} mods tracked for {} games\n",
-            self.mods.len().red(),
+            "\n{} tracked for {} games\n",
+            pluralize_mod(self.mods.len()),
             mapping.len().blue()
         )?;
 
@@ -110,11 +111,9 @@ impl Cacheable<&str> for Tracked {
 
     fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
         let bucket = super::bucket::<Self, &str>(db).unwrap();
-        if bucket.set(&self.key(), &Json(self.clone())).is_ok() {
-            Ok(1)
-        } else {
-            Ok(0)
-        }
+        bucket.set(&self.key(), &Json(self.clone()))?;
+        bucket.flush()?;
+        Ok(1)
     }
 
     fn update(&self, other: &Self) -> Self {

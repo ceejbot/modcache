@@ -3,6 +3,10 @@ set dotenv-load := false
 # build release version then run the skyrim updater
 all: build skyrim
 
+@tidy:
+	cargo clippy --fix
+	cargo +nightly fmt
+
 # build release version and stick it in the bindir
 build: _bin clean
 	@cargo build --release
