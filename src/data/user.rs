@@ -45,15 +45,10 @@ impl Cacheable for AuthenticatedUser {
         "authed_users"
     }
 
-    fn get(
-        _key: &&str,
-        _refresh: bool,
-        db: &kv::Store,
-        nexus: &mut NexusClient,
-    ) -> Option<Box<Self>> {
+    fn get(_key: &&str, _refresh: bool, nexus: &mut NexusClient) -> Option<Box<Self>> {
         // We do not ever rely on cache for this.
         if let Ok(user) = nexus.validate() {
-            match user.store(db) {
+            match user.store() {
                 Ok(_) => info!("stored authed user"),
                 Err(e) => warn!("failed to store authed user! {:?}", e),
             }
@@ -83,8 +78,8 @@ impl Cacheable for AuthenticatedUser {
         self.etag = etag.to_string()
     }
 
-    fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
-        let bucket = super::bucket::<Self>(db).unwrap();
+    fn store(&self) -> anyhow::Result<usize> {
+        let bucket = super::bucket::<Self>().unwrap();
         bucket.set(&self.key(), &Json(self.clone()))?;
         bucket.flush()?;
         Ok(1)

@@ -11,9 +11,7 @@ use crate::nexus::NexusClient;
 use crate::{Flags, GameMetadata};
 
 pub fn handle(flags: &Flags, game: &Option<String>, nexus: &mut NexusClient) -> anyhow::Result<()> {
-    let store = crate::store();
-
-    let maybe = Tracked::get(&Tracked::listkey(), flags.refresh, store, nexus);
+    let maybe = Tracked::get(&Tracked::listkey(), flags.refresh, nexus);
     let Some(tracked) = maybe else {
         log::error!("Something went wrong fetching tracked mods. Rerun with -v to get more details.");
         return Ok(());
@@ -36,7 +34,7 @@ pub fn handle(flags: &Flags, game: &Option<String>, nexus: &mut NexusClient) -> 
         return Ok(());
     }
 
-    let mut game_meta = GameMetadata::get(&game, flags.refresh, store, nexus).unwrap();
+    let mut game_meta = GameMetadata::get(&game, flags.refresh, nexus).unwrap();
     // bucket mods by category, treating removed and wastebinned mods separately.
     let mut uncached = 0;
     // I note that this list of special-cases is looking very pattern-like.
@@ -46,7 +44,7 @@ pub fn handle(flags: &Flags, game: &Option<String>, nexus: &mut NexusClient) -> 
     let mut cat_map: HashMap<u16, Vec<ModInfoFull>> = HashMap::new();
     filtered.iter().for_each(|m| {
         let key = CompoundKey::new(game.clone(), m.mod_id);
-        if let Some(mod_info) = local::<ModInfoFull>(&key, store) {
+        if let Some(mod_info) = local::<ModInfoFull>(&key) {
             let bucket = cat_map
                 .entry(mod_info.category_id())
                 .or_insert_with(Vec::new);

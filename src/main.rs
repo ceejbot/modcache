@@ -200,7 +200,7 @@ enum Command {
 static STORE: OnceCell<kv::Store> = OnceCell::new();
 
 /// Fetch our kv store instance
-pub fn store() -> &'static kv::Store {
+pub fn kvstore() -> &'static kv::Store {
     STORE.get_or_init(|| {
         let dbpath = std::env::var("NEXUS_CACHE_PATH")
             .unwrap_or_else(|_| "./db/nexus_cache.sled".to_string());
@@ -262,10 +262,8 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
             cleanup::wastebinned(&flags, game, &mut nexus)?;
         }
         Command::Mod { game, mod_id } => {
-            let store = store();
-
             let key = CompoundKey::new(game, mod_id);
-            if let Some(modinfo) = ModInfoFull::get(&key, flags.refresh, store, &mut nexus) {
+            if let Some(modinfo) = ModInfoFull::get(&key, flags.refresh, &mut nexus) {
                 if flags.json {
                     let pretty = serde_json::to_string_pretty(&modinfo)?;
                     println!("{}", pretty);
@@ -313,16 +311,15 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
             cleanup::untrack_removed(&flags, game, &mut nexus)?;
         }
         Command::Changelogs { game, mod_id } => {
-            let store = store();
             let key = CompoundKey::new(game.clone(), mod_id);
-            let maybe = Changelogs::get(&key, flags.refresh, store, &mut nexus);
+            let maybe = Changelogs::get(&key, flags.refresh, &mut nexus);
             if let Some(changelogs) = maybe {
                 if flags.json {
                     let pretty = serde_json::to_string_pretty(&changelogs)?;
                     println!("{}", pretty);
                     return Ok(());
                 }
-                if let Some(mod_info) = ModInfoFull::get(&key, false, store, &mut nexus) {
+                if let Some(mod_info) = ModInfoFull::get(&key, false, &mut nexus) {
                     println!(
                         "\nchangelogs for \x1b]8;;{}\x1b\\{}\x1b]8;;\x1b\\",
                         mod_info.url(),
@@ -340,10 +337,8 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
             }
         }
         Command::Files { game, mod_id } => {
-            let store = store();
-
             let key = CompoundKey::new(game, mod_id);
-            let maybe = Files::get(&key, flags.refresh, store, &mut nexus);
+            let maybe = Files::get(&key, flags.refresh, &mut nexus);
             if let Some(files) = maybe {
                 let pretty = serde_json::to_string_pretty(&files)?;
                 println!("{}", pretty);
@@ -395,11 +390,10 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                 return Ok(());
             }
 
-            let store = store();
             for item in res.mods.into_iter() {
                 println!("{}", item);
                 // never waste an opportunity to cache!
-                if item.store(store).is_err() {
+                if item.store().is_err() {
                     log::error!("storing mod failed...");
                 };
             }
@@ -411,12 +405,11 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                 println!("{}", pretty);
                 return Ok(());
             }
-            let store = store();
 
             for item in res.mods.into_iter() {
                 if item.available() {
                     println!("{}", item);
-                    if item.store(store).is_err() {
+                    if item.store().is_err() {
                         log::error!("storing mod failed...");
                     };
                 }
@@ -429,11 +422,10 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                 println!("{}", pretty);
                 return Ok(());
             }
-            let store = store();
 
             for item in res.mods.into_iter() {
                 println!("{}", item);
-                if item.store(store).is_err() {
+                if item.store().is_err() {
                     log::error!("storing mod failed...");
                 };
             }

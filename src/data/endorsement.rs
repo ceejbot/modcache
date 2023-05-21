@@ -131,13 +131,8 @@ impl Cacheable for EndorsementList {
         "endorsements"
     }
 
-    fn get(
-        key: &&'static str,
-        refresh: bool,
-        db: &kv::Store,
-        nexus: &mut NexusClient,
-    ) -> Option<Box<Self>> {
-        super::get::<Self>(key, refresh, db, nexus)
+    fn get(key: &&'static str, refresh: bool, nexus: &mut NexusClient) -> Option<Box<Self>> {
+        super::get::<Self>(key, refresh, nexus)
     }
 
     fn fetch(
@@ -160,8 +155,8 @@ impl Cacheable for EndorsementList {
         self.etag = etag.to_string()
     }
 
-    fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
-        let bucket = super::bucket::<Self>(db).unwrap();
+    fn store(&self) -> anyhow::Result<usize> {
+        let bucket = super::bucket::<Self>().unwrap();
         bucket.set(&self.key(), &Json(self.clone()))?;
         bucket.flush()?;
         Ok(1)

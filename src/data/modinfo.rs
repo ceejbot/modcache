@@ -122,8 +122,8 @@ pub struct ModInfoFull {
 }
 
 impl ModInfoFull {
-    pub fn by_prefix(prefix: &str, db: &kv::Store) -> Vec<Self> {
-        let bucket = super::bucket::<Self>(db).unwrap();
+    pub fn by_prefix(prefix: &str) -> Vec<Self> {
+        let bucket = super::bucket::<Self>().unwrap();
 
         let mut result: Vec<Self> = Vec::new();
         if let Ok(prefixes) = bucket.iter_prefix(&prefix) {
@@ -294,13 +294,8 @@ impl Cacheable for ModInfoFull {
         "mods"
     }
 
-    fn get(
-        key: &CompoundKey,
-        refresh: bool,
-        db: &kv::Store,
-        nexus: &mut NexusClient,
-    ) -> Option<Box<Self>> {
-        super::get::<Self>(key, refresh, db, nexus)
+    fn get(key: &CompoundKey, refresh: bool, nexus: &mut NexusClient) -> Option<Box<Self>> {
+        super::get::<Self>(key, refresh, nexus)
     }
 
     fn fetch(
@@ -328,8 +323,8 @@ impl Cacheable for ModInfoFull {
         self.etag = etag.to_string()
     }
 
-    fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
-        let bucket = super::bucket::<Self>(db).unwrap();
+    fn store(&self) -> anyhow::Result<usize> {
+        let bucket = super::bucket::<Self>().unwrap();
         bucket.set(&&*self.key().to_string(), &Json(self.clone()))?;
         bucket.flush()?;
         Ok(1)

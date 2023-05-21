@@ -86,13 +86,8 @@ impl Cacheable for Tracked {
         "mod_ref_lists"
     }
 
-    fn get(
-        _key: &&str,
-        refresh: bool,
-        db: &kv::Store,
-        nexus: &mut NexusClient,
-    ) -> Option<Box<Self>> {
-        super::get::<Self>(&"tracked", refresh, db, nexus)
+    fn get(_key: &&str, refresh: bool, nexus: &mut NexusClient) -> Option<Box<Self>> {
+        super::get::<Self>(&"tracked", refresh, nexus)
     }
 
     fn fetch(_key: &&str, nexus: &mut NexusClient, etag: Option<String>) -> Option<Box<Self>> {
@@ -111,8 +106,8 @@ impl Cacheable for Tracked {
         self.etag = etag.to_string()
     }
 
-    fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
-        let bucket = super::bucket::<Self>(db).unwrap();
+    fn store(&self) -> anyhow::Result<usize> {
+        let bucket = super::bucket::<Self>().unwrap();
         bucket.set(&self.key(), &Json(self.clone()))?;
         bucket.flush()?;
         Ok(1)

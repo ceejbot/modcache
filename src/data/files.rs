@@ -66,13 +66,8 @@ impl Cacheable for Files {
         "files"
     }
 
-    fn get(
-        key: &CompoundKey,
-        refresh: bool,
-        db: &kv::Store,
-        nexus: &mut NexusClient,
-    ) -> Option<Box<Self>> {
-        super::get::<Self>(key, refresh, db, nexus)
+    fn get(key: &CompoundKey, refresh: bool, nexus: &mut NexusClient) -> Option<Box<Self>> {
+        super::get::<Self>(key, refresh, nexus)
     }
 
     fn fetch(
@@ -105,8 +100,8 @@ impl Cacheable for Files {
         self.etag = etag.to_string()
     }
 
-    fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
-        let bucket = super::bucket::<Self>(db).unwrap();
+    fn store(&self) -> anyhow::Result<usize> {
+        let bucket = super::bucket::<Self>().unwrap();
         if bucket
             .set(&&*self.key().to_string(), &Json(self.clone()))
             .is_ok()

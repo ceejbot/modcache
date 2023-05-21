@@ -10,7 +10,6 @@ fn emit_search_results(
     filter: &str,
     metadata: GameMetadata,
     mods: Vec<ModInfoFull>,
-    store: &kv::Store,
     nexus: &mut NexusClient,
 ) -> anyhow::Result<()> {
     if flags.json {
@@ -37,7 +36,7 @@ fn emit_search_results(
 
         for m in mods.into_iter() {
             let refreshed = if flags.refresh {
-                ModInfoFull::get(&m.key(), true, store, nexus)
+                ModInfoFull::get(&m.key(), true, nexus)
             } else {
                 None
             };
@@ -58,8 +57,7 @@ pub fn by_name(
     filter: &str,
     nexus: &mut NexusClient,
 ) -> anyhow::Result<()> {
-    let store: &kv::Store = crate::store();
-    let Some(metadata) = GameMetadata::get(game, flags.refresh, store, nexus) else {
+    let Some(metadata) = GameMetadata::get(game, flags.refresh, nexus) else {
         println!(
             "No game identified as {} found on the Nexus. Recheck the slug!",
             game.yellow().bold()
@@ -67,8 +65,8 @@ pub fn by_name(
         return Ok(());
     };
 
-    let mods = metadata.mods_name_match(filter, store);
-    emit_search_results(flags, filter, *metadata, mods, store, nexus)?;
+    let mods = metadata.mods_name_match(filter);
+    emit_search_results(flags, filter, *metadata, mods, nexus)?;
 
     Ok(())
 }
@@ -79,8 +77,7 @@ pub fn full_text(
     filter: &str,
     nexus: &mut NexusClient,
 ) -> anyhow::Result<()> {
-    let store: &kv::Store = crate::store();
-    let Some(metadata) = GameMetadata::get(game, flags.refresh, store, nexus) else {
+    let Some(metadata) = GameMetadata::get(game, flags.refresh, nexus) else {
         println!(
             "No game identified as {} found on the Nexus. Recheck the slug!",
             game.yellow().bold()
@@ -88,8 +85,8 @@ pub fn full_text(
         return Ok(());
     };
 
-    let mods = metadata.mods_match_text(filter, store);
-    emit_search_results(flags, filter, *metadata, mods, store, nexus)?;
+    let mods = metadata.mods_match_text(filter);
+    emit_search_results(flags, filter, *metadata, mods, nexus)?;
 
     Ok(())
 }

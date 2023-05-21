@@ -13,15 +13,13 @@ pub fn handle(
     limit: u16,
     nexus: &mut NexusClient,
 ) -> anyhow::Result<()> {
-    let store = crate::store();
-
-    let gamemeta = GameMetadata::get(game, flags.refresh, store, nexus);
+    let gamemeta = GameMetadata::get(game, flags.refresh, nexus);
     if gamemeta.is_none() {
         log::warn!("{} can't be found on the Nexus! Bailing.", game);
         return Ok(());
     }
 
-    let tracked = Tracked::get(&Tracked::listkey(), flags.refresh, store, nexus);
+    let tracked = Tracked::get(&Tracked::listkey(), flags.refresh, nexus);
     if tracked.is_none() {
         anyhow::bail!("Unable to fetch any tracked mods.");
     }
@@ -46,10 +44,10 @@ pub fn handle(
         let modinfo = item.unwrap();
         let key = CompoundKey::new(modinfo.domain_name.clone(), modinfo.mod_id);
         // Find the next uncached mod.
-        let maybe_mod = if local::<ModInfoFull>(&key, store).is_some() {
+        let maybe_mod = if local::<ModInfoFull>(&key).is_some() {
             None
         } else if let Some(m) = ModInfoFull::fetch(&key, nexus, None) {
-            m.store(store)?;
+            m.store()?;
             fetches += 1;
             Some(m)
         } else {

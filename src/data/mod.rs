@@ -22,25 +22,21 @@ pub use modinfo::*;
 pub use tracked::*;
 pub use user::*;
 
+use crate::kvstore;
 use crate::nexus::NexusClient;
 
 /// Get the item, looking in local cache first then calling to the Nexus if not found.
 /// Set refresh to true if you want to check the Nexus even if you have a cache hit.
-pub fn get<T>(
-    key: &<T as Cacheable>::K,
-    refresh: bool,
-    db: &kv::Store,
-    nexus: &mut NexusClient,
-) -> Option<Box<T>>
+pub fn get<T>(key: &<T as Cacheable>::K, refresh: bool, nexus: &mut NexusClient) -> Option<Box<T>>
 where
     T: Cacheable + Debug,
 {
-    if let Some(found) = local::<T>(key, db) {
+    if let Some(found) = local::<T>(key) {
         if refresh {
             if let Some(fetched) = T::fetch(key, nexus, Some(found.etag().to_string())) {
                 log::info!("    ↪ refreshed nexus data");
                 let merged = found.update(&fetched);
-                match merged.store(db) {
+                match merged.store() {
                     Ok(_) => {
                         log::info!("    ✓ cached nexus data");
                     }
@@ -58,7 +54,7 @@ where
         }
     } else if let Some(fetched) = T::fetch(key, nexus, None) {
         log::info!("    ﹢ first fetch of nexus data");
-        if fetched.store(db).is_ok() {
+        if fetched.store().is_ok() {
             log::info!("    ✓ cached new nexus data");
         }
         Some(fetched)
@@ -69,10 +65,12 @@ where
 }
 
 /// Given a bucket name and appropriate types, return a kv bucket for the data.
-pub fn bucket<T>(db: &kv::Store) -> Option<kv::Bucket<'static, &'static str, Json<T>>>
+pub fn bucket<T>() -> Option<kv::Bucket<'static, &'static str, Json<T>>>
 where
     T: Cacheable,
 {
+    let db = kvstore();
+
     match db.bucket::<&str, Json<T>>(Some(T::bucket_name())) {
         Err(e) => {
             log::info!("Can't open bucket {}! {:?}", T::bucket_name(), e);
@@ -83,11 +81,11 @@ where
 }
 
 /// Look for an item locally, in the kv store, by type and key.
-pub fn local<T>(key: &<T as Cacheable>::K, db: &kv::Store) -> Option<Box<T>>
+pub fn local<T>(key: &<T as Cacheable>::K) -> Option<Box<T>>
 where
     T: Cacheable,
 {
-    let bucket = bucket::<T>(db).unwrap();
+    let bucket = bucket::<T>().unwrap();
     let found: Option<Json<T>> = bucket.get(&&*key.to_string()).ok()?;
     found.map(|x| Box::new(x.into_inner()))
 }
@@ -104,12 +102,7 @@ where
     /// Get an item of this type, looking in local storage first then fetching from the Nexus if it
     /// isn't found locally. Set `refresh` to true to do a conditional GET to the Nexus for updated
     /// data even if we have a local hit. All implementations just call the parametrized get.
-    fn get(
-        key: &Self::K,
-        refresh: bool,
-        db: &kv::Store,
-        nexus: &mut NexusClient,
-    ) -> Option<Box<Self>>;
+    fn get(key: &Self::K, refresh: bool, nexus: &mut NexusClient) -> Option<Box<Self>>;
     /// Fetch an item from the Nexus by key. Each data type has a unique endpoint.
     fn fetch(key: &Self::K, nexus: &mut NexusClient, etag: Option<String>) -> Option<Box<Self>>;
     /// Get this item's key
@@ -119,7 +112,7 @@ where
     /// Set the etag for this data.
     fn set_etag(&mut self, etag: &str);
     /// Store this item in local cache.
-    fn store(&self, db: &kv::Store) -> anyhow::Result<usize>;
+    fn store(&self) -> anyhow::Result<usize>;
     /// Merge properties, if wanted, before storing an updated version of this object. Only one data
     /// type needs this ability.
     fn update(&self, other: &Self) -> Self;

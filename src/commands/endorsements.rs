@@ -10,13 +10,8 @@ use crate::nexus::NexusClient;
 use crate::Flags;
 
 /// Display mod endorsements for a specific game, sorted by status.
-fn show_endorsements(
-    game: &str,
-    modlist: &[UserEndorsement],
-    store: &kv::Store,
-    client: &mut NexusClient,
-) {
-    let game_meta = GameMetadata::get(&game.to_string(), false, store, client).unwrap();
+fn show_endorsements(game: &str, modlist: &[UserEndorsement], client: &mut NexusClient) {
+    let game_meta = GameMetadata::get(&game.to_string(), false, client).unwrap();
     println!(
         "\n{} opinions for {}",
         modlist.len().blue(),
@@ -37,7 +32,7 @@ fn show_endorsements(
         table.set_format(*prettytable::format::consts::FORMAT_CLEAN);
         list.iter().for_each(|opinion| {
             let key = CompoundKey::new(game.to_string(), opinion.mod_id());
-            if let Some(mod_info) = ModInfoFull::get(&key, false, store, client) {
+            if let Some(mod_info) = ModInfoFull::get(&key, false, client) {
                 table.add_row(row![
                     format!("{}", opinion.status()),
                     format!(
@@ -67,10 +62,8 @@ fn show_endorsements(
 }
 
 pub fn handle(flags: &Flags, game: &Option<String>, nexus: &mut NexusClient) -> anyhow::Result<()> {
-    let store = crate::store();
-
     let maybe: Option<Box<EndorsementList>> =
-        EndorsementList::get(&EndorsementList::listkey(), flags.refresh, store, nexus);
+        EndorsementList::get(&EndorsementList::listkey(), flags.refresh, nexus);
 
     let Some(opinions) = maybe else {
         log::error!("Something went wrong fetching endorsements. Rerun with -v to get more details.");
@@ -80,7 +73,7 @@ pub fn handle(flags: &Flags, game: &Option<String>, nexus: &mut NexusClient) -> 
 
     if let Some(game) = game {
         if let Some(modlist) = mapping.get(game) {
-            show_endorsements(game, modlist, store, nexus);
+            show_endorsements(game, modlist, nexus);
         } else {
             println!("No opinions expressed on mods for {}.", game);
         }
@@ -95,7 +88,7 @@ pub fn handle(flags: &Flags, game: &Option<String>, nexus: &mut NexusClient) -> 
                 mapping.len().blue()
             );
             for (game, modlist) in mapping.iter() {
-                show_endorsements(game, modlist, store, nexus);
+                show_endorsements(game, modlist, nexus);
             }
         }
         return Ok(());

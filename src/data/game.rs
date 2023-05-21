@@ -105,7 +105,7 @@ impl GameMetadata {
     }
 
     /// Display full information about a game, its categories, and any mods in cache for it.
-    pub fn emit_fancy(&self, _db: &kv::Store) {
+    pub fn emit_fancy(&self) {
         println!("{}", self.name().yellow().bold());
         println!(
             "{} mods by {} authors",
@@ -128,9 +128,9 @@ impl GameMetadata {
     }
 
     /// Get all mods cached for this game.
-    pub fn mods(&self, db: &kv::Store) -> Vec<ModInfoFull> {
+    pub fn mods(&self) -> Vec<ModInfoFull> {
         let prefix = format!("{}/", &self.domain_name);
-        ModInfoFull::by_prefix(&prefix, db)
+        ModInfoFull::by_prefix(&prefix)
             .into_iter()
             .sorted_by(|left, right| UniCase::new(left.name()).cmp(&UniCase::new(right.name())))
             .collect()
@@ -138,9 +138,9 @@ impl GameMetadata {
 
     /// Get all mods for this game with names that match the given filter pattern.
     /// Case-insensitive, but otherwise a very naive match.
-    pub fn mods_name_match(&self, filter: &str, db: &kv::Store) -> Vec<ModInfoFull> {
+    pub fn mods_name_match(&self, filter: &str) -> Vec<ModInfoFull> {
         let prefix = format!("{}/", &self.domain_name);
-        let candidates = ModInfoFull::by_prefix(&prefix, db);
+        let candidates = ModInfoFull::by_prefix(&prefix);
         let patt = RegexBuilder::new(filter)
             .case_insensitive(true)
             .build()
@@ -154,9 +154,9 @@ impl GameMetadata {
     /// Get all mods for this game with names or summaries that match the given filter pattern.
     /// Case-insensitive, but otherwise a very naive match.
     // Note repetition with previous function. Searching needs some abstractions.
-    pub fn mods_match_text(&self, filter: &str, db: &kv::Store) -> Vec<ModInfoFull> {
+    pub fn mods_match_text(&self, filter: &str) -> Vec<ModInfoFull> {
         let prefix = format!("{}/", &self.domain_name);
-        let candidates = ModInfoFull::by_prefix(&prefix, db);
+        let candidates = ModInfoFull::by_prefix(&prefix);
         let patt = RegexBuilder::new(filter)
             .case_insensitive(true)
             .build()
@@ -175,9 +175,9 @@ impl GameMetadata {
 
     // I learned a surprising thing about rust when I tried to make a single function
     // to which I pass the enum variant I want to match against.
-    pub fn mods_hidden(&self, db: &kv::Store) -> Vec<ModInfoFull> {
+    pub fn mods_hidden(&self) -> Vec<ModInfoFull> {
         let prefix = format!("{}/", &self.domain_name);
-        let candidates = ModInfoFull::by_prefix(&prefix, db);
+        let candidates = ModInfoFull::by_prefix(&prefix);
         candidates
             .into_iter()
             .filter(|modinfo| matches!(modinfo.status(), ModStatus::Hidden))
@@ -185,9 +185,9 @@ impl GameMetadata {
             .collect()
     }
 
-    pub fn mods_removed(&self, db: &kv::Store) -> Vec<ModInfoFull> {
+    pub fn mods_removed(&self) -> Vec<ModInfoFull> {
         let prefix = format!("{}/", &self.domain_name);
-        let candidates = ModInfoFull::by_prefix(&prefix, db);
+        let candidates = ModInfoFull::by_prefix(&prefix);
         candidates
             .into_iter()
             .filter(|modinfo| matches!(modinfo.status(), ModStatus::Removed))
@@ -195,9 +195,9 @@ impl GameMetadata {
             .collect()
     }
 
-    pub fn mods_wastebinned(&self, db: &kv::Store) -> Vec<ModInfoFull> {
+    pub fn mods_wastebinned(&self) -> Vec<ModInfoFull> {
         let prefix = format!("{}/", &self.domain_name);
-        let candidates = ModInfoFull::by_prefix(&prefix, db);
+        let candidates = ModInfoFull::by_prefix(&prefix);
         candidates
             .into_iter()
             .filter(|modinfo| matches!(modinfo.status(), ModStatus::Wastebinned))
@@ -213,13 +213,8 @@ impl Cacheable for GameMetadata {
         "games"
     }
 
-    fn get(
-        key: &String,
-        refresh: bool,
-        store: &kv::Store,
-        nexus: &mut NexusClient,
-    ) -> Option<Box<Self>> {
-        super::get::<Self>(key, refresh, store, nexus)
+    fn get(key: &String, refresh: bool, nexus: &mut NexusClient) -> Option<Box<Self>> {
+        super::get::<Self>(key, refresh, nexus)
     }
 
     fn fetch(key: &String, nexus: &mut NexusClient, etag: Option<String>) -> Option<Box<Self>> {
@@ -238,8 +233,8 @@ impl Cacheable for GameMetadata {
         self.etag = etag.to_string()
     }
 
-    fn store(&self, db: &kv::Store) -> anyhow::Result<usize> {
-        let bucket = super::bucket::<Self>(db).unwrap();
+    fn store(&self) -> anyhow::Result<usize> {
+        let bucket = super::bucket::<Self>().unwrap();
         bucket.set(&&*self.domain_name, &Json(self.clone()))?;
         bucket.flush()?;
         Ok(1)

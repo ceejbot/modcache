@@ -9,9 +9,7 @@ use crate::nexus::NexusClient;
 use crate::{Flags, GameMetadata};
 
 pub fn hidden(flags: &Flags, game: &String, nexus: &mut NexusClient) -> anyhow::Result<()> {
-    let store = crate::store();
-
-    let Some(metadata) = GameMetadata::get(game, flags.refresh, store, nexus) else {
+    let Some(metadata) = GameMetadata::get(game, flags.refresh, nexus) else {
         println!(
             "No game identified as {} found on the Nexus. Recheck the slug!",
             game.yellow().bold()
@@ -19,8 +17,8 @@ pub fn hidden(flags: &Flags, game: &String, nexus: &mut NexusClient) -> anyhow::
         return Ok(())
     };
 
-    let mut mods = metadata.mods_hidden(store);
-    if let Some(all_tracked) = Tracked::get(&Tracked::listkey(), flags.refresh, store, nexus) {
+    let mut mods = metadata.mods_hidden();
+    if let Some(all_tracked) = Tracked::get(&Tracked::listkey(), flags.refresh, nexus) {
         // filter tracked mods from hidden
         let tracked: HashSet<u32> = all_tracked
             .by_game(game)
@@ -56,7 +54,7 @@ pub fn hidden(flags: &Flags, game: &String, nexus: &mut NexusClient) -> anyhow::
         // refresh.
         for m in mods.into_iter() {
             let refreshed = if flags.refresh {
-                ModInfoFull::get(&m.key(), true, store, nexus)
+                ModInfoFull::get(&m.key(), true, nexus)
             } else {
                 None
             };
@@ -72,8 +70,7 @@ pub fn hidden(flags: &Flags, game: &String, nexus: &mut NexusClient) -> anyhow::
 }
 
 pub fn removed(flags: &Flags, game: &String, nexus: &mut NexusClient) -> anyhow::Result<()> {
-    let store = crate::store();
-    let Some(metadata) = GameMetadata::get(game, flags.refresh, store, nexus) else {
+    let Some(metadata) = GameMetadata::get(game, flags.refresh, nexus) else {
         println!(
             "No game identified as {} found on the Nexus. Recheck the slug!",
             game.yellow().bold()
@@ -81,7 +78,7 @@ pub fn removed(flags: &Flags, game: &String, nexus: &mut NexusClient) -> anyhow:
         return Ok(())
     };
 
-    let mods = metadata.mods_removed(store);
+    let mods = metadata.mods_removed();
     if flags.json {
         let pretty = serde_json::to_string_pretty(&mods)?;
         println!("{}", pretty);
@@ -104,9 +101,7 @@ pub fn removed(flags: &Flags, game: &String, nexus: &mut NexusClient) -> anyhow:
 }
 
 pub fn wastebinned(flags: &Flags, game: &String, nexus: &mut NexusClient) -> anyhow::Result<()> {
-    let store = crate::store();
-
-    let Some(metadata) = GameMetadata::get(game, flags.refresh, store, nexus) else {
+    let Some(metadata) = GameMetadata::get(game, flags.refresh, nexus) else {
         println!(
             "No game identified as {} found on the Nexus. Recheck the slug!",
             game.yellow().bold()
@@ -114,7 +109,7 @@ pub fn wastebinned(flags: &Flags, game: &String, nexus: &mut NexusClient) -> any
         return Ok(())
     };
 
-    let mods = metadata.mods_wastebinned(store);
+    let mods = metadata.mods_wastebinned();
     if flags.json {
         let pretty = serde_json::to_string_pretty(&mods)?;
         println!("{}", pretty);
@@ -144,9 +139,7 @@ pub fn untrack_removed(
     game: &String,
     nexus: &mut NexusClient,
 ) -> anyhow::Result<()> {
-    let store = crate::store();
-
-    let Some(metadata) = GameMetadata::get(game, flags.refresh, store, nexus) else {
+    let Some(metadata) = GameMetadata::get(game, flags.refresh, nexus) else {
         println!(
             "No game identified as {} found on the Nexus. Recheck the slug!",
             game.yellow().bold()
@@ -154,14 +147,14 @@ pub fn untrack_removed(
         return Ok(())
     };
 
-    let maybe = Tracked::get(&Tracked::listkey(), flags.refresh, store, nexus);
+    let maybe = Tracked::get(&Tracked::listkey(), flags.refresh, nexus);
     if let Some(all_tracked) = maybe {
         let tracked: HashSet<u32> = all_tracked
             .by_game(game)
             .iter()
             .map(|xs| xs.mod_id)
             .collect();
-        let mods = metadata.mods_removed(store);
+        let mods = metadata.mods_removed();
         for m in mods.into_iter() {
             // we minimize api calls to the nexus
             if tracked.contains(&m.mod_id()) {
