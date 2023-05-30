@@ -7,13 +7,14 @@
     unused_qualifications
 )]
 
+use std::str::FromStr;
 use std::sync::Mutex;
 
 use clap::{Parser, Subcommand};
 use dotenvy::dotenv;
 use once_cell::sync::OnceCell;
 use owo_colors::OwoColorize;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 pub mod commands;
 pub mod data;
@@ -139,6 +140,9 @@ enum Command {
     },
     /// Find mods with names matching the given string, for the named game.
     ByName {
+        /// Optional sort for the matches: name, author, date
+        #[clap(short, long, default_value = "id")]
+        sort: SortKey,
         /// Look for mods with names similar to this
         name: String,
         /// The slug for the game to filter by.
@@ -147,6 +151,9 @@ enum Command {
     },
     /// Find mods that mention this string in their names or text summaries.
     Search {
+        /// Optional sort for the matches: name, author, date
+        #[clap(short, long, default_value = "id")]
+        sort: SortKey,
         /// Look for mods that mention this string
         text: String,
         /// The slug for the game to filter by.
@@ -194,6 +201,43 @@ enum Command {
         #[clap(default_value = "skyrimspecialedition")]
         game: String,
     },
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub enum SortKey {
+    Id,
+    Name,
+    Date,
+    Author,
+}
+
+impl FromStr for SortKey {
+    type Err = anyhow::Error;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        match input.to_lowercase().as_str() {
+            "id" => Ok(SortKey::Id),
+            "name" => Ok(SortKey::Name),
+            "date" => Ok(SortKey::Date),
+            "author" => Ok(SortKey::Author),
+            _ => Ok(SortKey::Id),
+        }
+    }
+}
+
+pub trait SortByKey {
+    fn sort(&mut self, key: &SortKey);
+}
+
+impl SortByKey for Vec<ModInfoFull> {
+    fn sort(&mut self, key: &SortKey) {
+        match key {
+            SortKey::Id => self.sort_by_key(|xs| xs.mod_id()),
+            SortKey::Name => self.sort_by_key(|xs| xs.name()),
+            SortKey::Date => self.sort_by_key(|xs| xs.updated_timestamp()),
+            SortKey::Author => self.sort_by_key(|xs| xs.uploaded_by().to_string()),
+        }
+    }
 }
 
 /// A shared reference to our kv store on disk.
@@ -246,11 +290,19 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
         Command::Mods { ref game } => {
             handle_mods(&flags, game, &mut nexus)?;
         }
-        Command::ByName { ref name, ref game } => {
-            search::by_name(&flags, game, name, &mut nexus)?;
+        Command::ByName {
+            ref name,
+            ref game,
+            ref sort,
+        } => {
+            search::by_name(&flags, game, name, sort, &mut nexus)?;
         }
-        Command::Search { ref text, ref game } => {
-            search::full_text(&flags, game, text, &mut nexus)?;
+        Command::Search {
+            ref text,
+            ref game,
+            ref sort,
+        } => {
+            search::full_text(&flags, game, text, sort, &mut nexus)?;
         }
         Command::Hidden { ref game } => {
             cleanup::hidden(&flags, game, &mut nexus)?;

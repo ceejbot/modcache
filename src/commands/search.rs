@@ -3,7 +3,7 @@ use owo_colors::OwoColorize;
 use crate::data::modinfo::ModInfoFull;
 use crate::data::Cacheable;
 use crate::nexus::NexusClient;
-use crate::{Flags, GameMetadata};
+use crate::{Flags, GameMetadata, SortByKey, SortKey};
 
 fn emit_search_results(
     flags: &Flags,
@@ -55,6 +55,7 @@ pub fn by_name(
     flags: &Flags,
     game: &String,
     filter: &str,
+    sort: &SortKey,
     nexus: &mut NexusClient,
 ) -> anyhow::Result<()> {
     let Some(metadata) = GameMetadata::get(game, flags.refresh, nexus) else {
@@ -65,7 +66,8 @@ pub fn by_name(
         return Ok(());
     };
 
-    let mods = metadata.mods_name_match(filter);
+    let mut mods = metadata.mods_name_match(filter);
+    mods.sort(sort);
     emit_search_results(flags, filter, *metadata, mods, nexus)?;
 
     Ok(())
@@ -75,6 +77,7 @@ pub fn full_text(
     flags: &Flags,
     game: &String,
     filter: &str,
+    sort: &SortKey,
     nexus: &mut NexusClient,
 ) -> anyhow::Result<()> {
     let Some(metadata) = GameMetadata::get(game, flags.refresh, nexus) else {
@@ -85,7 +88,8 @@ pub fn full_text(
         return Ok(());
     };
 
-    let mods = metadata.mods_match_text(filter);
+    let mut mods = metadata.mods_match_text(filter);
+    mods.sort(sort);
     emit_search_results(flags, filter, *metadata, mods, nexus)?;
 
     Ok(())

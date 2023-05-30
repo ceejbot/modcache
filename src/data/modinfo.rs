@@ -172,6 +172,10 @@ impl ModInfoFull {
         &self.uploaded_by
     }
 
+    pub fn updated_timestamp(&self) -> u64 {
+        self.updated_timestamp
+    }
+
     pub fn url(&self) -> String {
         format!(
             "https://www.nexusmods.com/{}/mods/{}",
@@ -273,15 +277,16 @@ impl Display for ModInfoFull {
         };
         let summary = textwrap::fill(&self.summary_cleaned(), width);
         let dt = match self.updated_time.parse::<DateTime<Utc>>() {
-            Ok(v) => v.format("%c").to_string(),
+            Ok(v) => v.format("%Y-%m-%d").to_string(),
             Err(_) => self.updated_time.clone(),
         };
         write!(
             f,
-            "{}\nversion {} updated {}\n{}\n",
+            "{}\n{} {} {}\n{}\n",
             self.compact_info(),
+            "last update".dimmed(),
+            dt.blue().bold(),
             self.version.red(),
-            dt.blue(),
             &summary
         )
     }
