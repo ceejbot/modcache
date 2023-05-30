@@ -4,12 +4,17 @@ use std::fmt::Display;
 
 use chrono::{DateTime, Utc};
 use kv::{Codec, Json};
+use once_cell::sync::Lazy;
 use owo_colors::OwoColorize;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use terminal_size::*;
 
 use crate::nexus::NexusClient;
 use crate::{Cacheable, CompoundKey, EndorsementStatus};
+
+static SUMMARY_CLEANER: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(\[[^\]]+\]|<br />|<br>)").unwrap());
 
 #[derive(serde::Deserialize, Serialize, Debug, Clone)]
 pub struct ModAuthor {
@@ -149,7 +154,7 @@ impl ModInfoFull {
     }
 
     pub fn summary_cleaned(&self) -> String {
-        self.summary.replace("<br />", "\n")
+        SUMMARY_CLEANER.replace_all(&self.summary, "").to_string()
     }
 
     pub fn description(&self) -> &str {

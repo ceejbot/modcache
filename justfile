@@ -8,17 +8,18 @@ all: build skyrim
 	cargo +nightly fmt
 
 # build release version and stick it in the bindir
-build: _bin clean
-	@cargo build --release
-	@cp target/release/modcache bin/
+@build: _bin clean
+	cargo build --release
+	cp target/release/modcache bin/
+	cp target/release/modcache ~/bin
 
 # refresh tracked mods
 update:
     ./bin/modcache --refresh tracked
 
 # populate the cache with missing items
-skyrim: update
-	@bin/modcache populate
+@skyrim: update
+	bin/modcache populate
 
 _bin:
 	@mkdir -p bin
