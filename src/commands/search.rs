@@ -73,6 +73,28 @@ pub fn by_name(
     Ok(())
 }
 
+pub fn by_author(
+    flags: &Flags,
+    game: &String,
+    filter: &str,
+    sort: &SortKey,
+    nexus: &mut NexusClient,
+) -> anyhow::Result<()> {
+    let Some(metadata) = GameMetadata::get(game, flags.refresh, nexus) else {
+        println!(
+            "No game identified as {} found on the Nexus. Recheck the slug!",
+            game.yellow().bold()
+        );
+        return Ok(());
+    };
+
+    let mut mods = metadata.mods_author_match(filter);
+    mods.sort(sort);
+    emit_search_results(flags, filter, *metadata, mods, nexus)?;
+
+    Ok(())
+}
+
 pub fn full_text(
     flags: &Flags,
     game: &String,

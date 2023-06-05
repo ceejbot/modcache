@@ -1,0 +1,35 @@
+{
+  "domain_name": "skyrimspecialedition",
+  "mod_id": 92607,
+  "name": "Open Animation Replacer - Math Plugin",
+  "summary": "A plugin utilizing Open Animation Replacer's API to add a new complex custom condition. Mostly supposed to serve as an example for programmers, but might find use in some replacer mods.",
+  "picture_url": "https://staticdelivery.nexusmods.com/mods/1704/images/92607/92607-1685624410-137351880.png",
+  "version": "1.0.0",
+  "author": "Ersh",
+  "uploaded_by": "Ershin",
+  "user": {
+    "member_group_id": 27,
+    "member_id": 2749008,
+    "name": "Ershin"
+  },
+  "uploaded_users_profile_url": "https://nexusmods.com/users/2749008",
+  "description": "[img]https://i.imgur.com/E43TTNV.png[/img]\n<br />\n<br />   ﻿This plugin adds a new condition to Open Animation Replacer. At first it was a part of the original plugin, but including the math expression library ([url=http://www.partow.net/programming/exprtk/]exprtk[/url]) literally quadrupled the plugin's size. It felt wrong to have the majority of the plugin's size come from one single feature. I've decided to remove the condition, but later on figured that it might be a good example of a more complex condition being added through the Open Animation Replacer API.\n<br />   ﻿It's [b]mostly useful as an example for programmers[/b], and as a proof of it being possible to add new, decently complex conditions through other plugins. The condition itself works and is pretty cool, although I can't come up with real use cases where other existing conditions aren't enough. Maybe someone finds a good use case for it, worth installing an additional plugin.\n<br />\n<br />   ﻿﻿No real reason to install the plugin if none of the replacer mods you're using require it - unless you're curious, or are a replacer mod author and have a use for the condition.\n<br />\n<br />[center][url=https://ko-fi.com/ershin][img]https://github.com/doodlum/nexusmods-widgets/blob/main/Ko-fi_40px_60fps.png?raw=true[/img][/url]  [url=https://patreon.com/Ershin][img]https://github.com/doodlum/nexusmods-widgets/blob/main/Patreon_40px.png?raw=true[/img][/url][/center]\n<br />\n<br />[img]https://i.imgur.com/17QkdAj.png[/img]\n<br />\n<br />[center][img]https://i.imgur.com/YZ5Gfh1.png[/img][/center][center][size=2]A nonsensical Math Statement condition.[/size][/center]﻿\n<br />   ﻿The plugin adds a new condition called [b]MathStatement[/b]. It lets you write a math expression (e.g. x + y &gt; 20) in the text box in the editor, and then it automatically creates a numeric value component for every variable in that math statement. The numeric values work like numeric values in all other conditions, so they can be a [i]static value[/i], a reference to a [i]global variable[/i], an [i]Actor Value[/i], or a [i]behavior graph variable[/i].\n<br />   ﻿The condition simply evaluates the result of the expression and checks if it's something else than 0 - so, with an actual math statement, it means that it checks whether the statement is true.\n<br />\n<br />   ﻿The used math library, [url=http://www.partow.net/programming/exprtk/]exprtk[/url], is very powerful and you can create really complex expressions. Like I mentioned before, however, I struggle to see a real use case. But it's pretty cool.\n<br />\n<br />\n<br />[img]https://i.imgur.com/gvKSmdx.png[/img]\n<br />\n<br />[list]\n<br />[*][url=https://skse.silverlock.org/]SKSE[/url]\n<br />[*][url=https://www.nexusmods.com/skyrimspecialedition/mods/92109]Open Animation Replacer[/url]﻿\n<br />[/list]\n<br />Use your mod manager of choice.\n<br />\n<br />\n<br />[img]https://i.imgur.com/OIXIccV.png[/img]\n<br />\n<br />   [url=https://github.com/ersh1/OpenAnimationReplacer-Math]GitHub[/url]\n<br />\n<br />\n<br />[img]https://i.imgur.com/cgEcXac.png[/img]\n<br />\n<br />[b]My patrons for the support!❤️[/b]\n<br />\n<br />The SKSE Team for SKSE.\n<br />[url=https://www.nexusmods.com/skyrimspecialedition/users/5687342]﻿Ryan[/url] for the invaluable [url=https://github.com/Ryan-rsm-McKenzie/CommonLibSSE]CommonLibSSE[/url], and the [url=https://github.com/Ryan-rsm-McKenzie/ExamplePlugin-CommonLibSSE]CommonLibSSE plugin template[/url].\n<br />[url=https://www.nexusmods.com/skyrimspecialedition/users/2148728]powerofthree[/url] for the [url=https://github.com/powerof3/CommonLibSSE]CommonLibSSE fork[/url].\n<br />[url=https://github.com/CharmedBaryon/]CharmedBaryon[/url] for [url=https://github.com/CharmedBaryon/CommonLibSSE-NG/]CommonLibSSE-NG[/url].\n<br />Everyone who kept pressuring me to work on an open source DAR successor.\n<br />All the Skyrim reverse engineers who share their work, as well as everyone who share the source to their SKSE plugins. Without their contributions, I wouldn't have been able to learn how to do any of this.\n<br />[url=https://www.nexusmods.com/skyrimspecialedition/mods/386]Sovngarde[/url] font has been used in the mod description.",
+  "created_time": "2023-06-01T14:12:08.000+00:00",
+  "created_timestamp": 1685628728,
+  "updated_time": "2023-06-01T14:12:08.000+00:00",
+  "updated_timestamp": 1685628728,
+  "available": true,
+  "status": "published",
+  "allow_rating": true,
+  "category_id": 39,
+  "contains_adult_content": false,
+  "endorsement": {
+    "endorse_status": "Undecided",
+    "timestamp": null,
+    "version": null
+  },
+  "endorsement_count": 37,
+  "game_id": 1704,
+  "uid": 7318624364991,
+  "etag": "W/\"55cfb5de9e22340162f384d08c1728c3\""
+}

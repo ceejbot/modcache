@@ -10,6 +10,7 @@
 use std::str::FromStr;
 use std::sync::Mutex;
 
+use anyhow::Result;
 use clap::{Parser, Subcommand};
 use dotenvy::dotenv;
 use once_cell::sync::OnceCell;
@@ -23,36 +24,48 @@ pub mod nexus;
 
 use commands::*;
 use data::*;
+use unicase::UniCase;
 
 // Set up the cli and commands
 #[derive(Debug, Parser)]
 #[clap(author, version, about, long_about = None)]
 pub struct Flags {
-    #[clap(
+    #[clap(subcommand)]
+    cmd: Command,
+    #[arg(
         short,
         long,
         action = clap::ArgAction::Count,
-        help = "Pass -v or -vv to increase verbosity"
+        help = "Pass -v or -vv to increase verbosity",
+        global = true
     )]
     verbose: u8,
-    #[clap(
+    #[arg(
         short,
         long,
-        help = "Emit full output as json; not applicable everywhere"
+        help = "Emit full output as json; not applicable everywhere",
+        global = true
     )]
     json: bool,
-    #[clap(
+    #[arg(
         short,
         long,
-        help = "Refresh data from the Nexus; not applicable everywhere"
+        help = "Refresh data from the Nexus; not applicable everywhere",
+        global = true
     )]
     refresh: bool,
-    #[clap(subcommand)]
-    cmd: Command,
 }
 
 #[derive(Clone, Debug, Serialize, Subcommand)]
 enum Command {
+    /// Test your Nexus API key; whoami
+    #[clap(alias = "whoami")]
+    Validate,
+    /// Fetch your list of tracked mods and show a by-game summary.
+    Tracked {
+        /// Optionally, display a detailed list of tracked mods for a specific game.
+        game: Option<String>,
+    },
     /// Populate the local cache with mods tracked for a specific game.
     Populate {
         /// The number of API calls allowed before stopping.
@@ -62,13 +75,42 @@ enum Command {
         #[clap(default_value = "skyrimspecialedition")]
         game: String,
     },
-    /// Test your Nexus API key; whoami
-    #[clap(alias = "whoami")]
-    Validate,
-    /// Fetch your list of tracked mods and show a by-game summary.
-    Tracked {
-        /// Optionally, display a detailed list of tracked mods for a specific game.
-        game: Option<String>,
+    /// Find mods that mention this string in their names or text summaries.
+    /// 
+    /// Pass --refresh to update cached data from the Nexus for each result.
+    Search {
+        /// Optional sort for the matches: name, author, date
+        #[clap(short, long, default_value = "id")]
+        sort: SortKey,
+        /// Look for mods that mention this string
+        text: String,
+        /// The slug for the game to filter by.
+        #[clap(default_value = "skyrimspecialedition")]
+        game: String,
+    },
+    /// Find mods with names matching the given string, for the named game.
+    /// 
+    /// Pass --refresh to update cached data from the Nexus for each result.
+    ByName {
+        /// Optional sort for the matches: name, author, date
+        #[clap(short, long, default_value = "id")]
+        sort: SortKey,
+        /// Look for mods with names similar to this
+        name: String,
+        /// The slug for the game to filter by.
+        #[clap(default_value = "skyrimspecialedition")]
+        game: String,
+    },
+    /// Find mods by the given author, for the named game.
+    ByAuthor {
+        /// Optional sort for the matches: name, author, date, id
+        #[clap(short, long, default_value = "id")]
+        sort: SortKey,
+        /// Look for mods with authors similar to this
+        author: String,
+        /// The slug for the game to filter by.
+        #[clap(default_value = "skyrimspecialedition")]
+        game: String,
     },
     /// Track a specific mod
     Track {
@@ -135,28 +177,6 @@ enum Command {
     },
     /// Get all mods locally cached for this game by slug
     Mods {
-        #[clap(default_value = "skyrimspecialedition")]
-        game: String,
-    },
-    /// Find mods with names matching the given string, for the named game.
-    ByName {
-        /// Optional sort for the matches: name, author, date
-        #[clap(short, long, default_value = "id")]
-        sort: SortKey,
-        /// Look for mods with names similar to this
-        name: String,
-        /// The slug for the game to filter by.
-        #[clap(default_value = "skyrimspecialedition")]
-        game: String,
-    },
-    /// Find mods that mention this string in their names or text summaries.
-    Search {
-        /// Optional sort for the matches: name, author, date
-        #[clap(short, long, default_value = "id")]
-        sort: SortKey,
-        /// Look for mods that mention this string
-        text: String,
-        /// The slug for the game to filter by.
         #[clap(default_value = "skyrimspecialedition")]
         game: String,
     },
@@ -233,9 +253,9 @@ impl SortByKey for Vec<ModInfoFull> {
     fn sort(&mut self, key: &SortKey) {
         match key {
             SortKey::Id => self.sort_by_key(|xs| xs.mod_id()),
-            SortKey::Name => self.sort_by_key(|xs| xs.name()),
+            SortKey::Name => self.sort_by_key(|xs| UniCase::new(xs.name())),
             SortKey::Date => self.sort_by_key(|xs| xs.updated_timestamp()),
-            SortKey::Author => self.sort_by_key(|xs| xs.uploaded_by().to_string()),
+            SortKey::Author => self.sort_by_key(|xs| UniCase::new(xs.uploaded_by().to_string())),
         }
     }
 }
@@ -269,7 +289,7 @@ pub fn nexus_client() -> &'static Mutex<nexus::NexusClient> {
     })
 }
 
-fn main() -> anyhow::Result<(), anyhow::Error> {
+fn main() -> Result<()> {
     dotenv().ok();
     let flags = Flags::parse();
 
@@ -284,11 +304,28 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
     let mut nexus = nexus_client().lock().unwrap();
 
     match flags.cmd {
-        Command::Game { ref game } => {
-            handle_game(&flags, game, &mut nexus)?;
+        Command::Validate => {
+            handle_validate(&flags, &mut nexus)?;
         }
-        Command::Mods { ref game } => {
-            handle_mods(&flags, game, &mut nexus)?;
+        Command::Tracked { ref game } => {
+            handle_tracked(&flags, game, &mut nexus)?;
+        }
+        Command::Populate { ref game, limit } => {
+            handle_populate(&flags, game, limit, &mut nexus)?;
+        }
+        Command::Search {
+            ref text,
+            ref game,
+            ref sort,
+        } => {
+            search::full_text(&flags, game, text, sort, &mut nexus)?;
+        }
+        Command::ByAuthor {
+            ref author,
+            ref game,
+            ref sort,  
+        } => {
+            search::by_author(&flags, game, author, sort, &mut nexus)?;
         }
         Command::ByName {
             ref name,
@@ -297,12 +334,11 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
         } => {
             search::by_name(&flags, game, name, sort, &mut nexus)?;
         }
-        Command::Search {
-            ref text,
-            ref game,
-            ref sort,
-        } => {
-            search::full_text(&flags, game, text, sort, &mut nexus)?;
+        Command::Game { ref game } => {
+            handle_game(&flags, game, &mut nexus)?;
+        }
+        Command::Mods { ref game } => {
+            handle_mods(&flags, game, &mut nexus)?;
         }
         Command::Hidden { ref game } => {
             cleanup::hidden(&flags, game, &mut nexus)?;
@@ -323,15 +359,6 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
                     println!("{}", modinfo);
                 }
             }
-        }
-        Command::Populate { ref game, limit } => {
-            handle_populate(&flags, game, limit, &mut nexus)?;
-        }
-        Command::Validate => {
-            handle_validate(&flags, &mut nexus)?;
-        }
-        Command::Tracked { ref game } => {
-            handle_tracked(&flags, game, &mut nexus)?;
         }
         Command::Track { game, mod_id } => match nexus.track(&game, mod_id) {
             Ok(message) => {
@@ -436,53 +463,32 @@ fn main() -> anyhow::Result<(), anyhow::Error> {
         }
         Command::Trending { game } => {
             let res = nexus.trending(&game)?;
-            if flags.json {
-                let pretty = serde_json::to_string_pretty(&res)?;
-                println!("{}", pretty);
-                return Ok(());
-            }
-
-            for item in res.mods.into_iter() {
-                println!("{}", item);
-                // never waste an opportunity to cache!
-                if item.store().is_err() {
-                    log::error!("storing mod failed...");
-                };
-            }
+            store_and_print(&res.mods, flags.json)?;
         }
         Command::Latest { game } => {
             let res = nexus.latest_added(&game)?;
-            if flags.json {
-                let pretty = serde_json::to_string_pretty(&res)?;
-                println!("{}", pretty);
-                return Ok(());
-            }
-
-            for item in res.mods.into_iter() {
-                if item.available() {
-                    println!("{}", item);
-                    if item.store().is_err() {
-                        log::error!("storing mod failed...");
-                    };
-                }
-            }
+            store_and_print(&res.mods, flags.json)?;
         }
         Command::Updated { game } => {
             let res = nexus.latest_updated(&game)?;
-            if flags.json {
-                let pretty = serde_json::to_string_pretty(&res)?;
-                println!("{}", pretty);
-                return Ok(());
-            }
-
-            for item in res.mods.into_iter() {
-                println!("{}", item);
-                if item.store().is_err() {
-                    log::error!("storing mod failed...");
-                };
-            }
+            store_and_print(&res.mods, flags.json)?;
         }
     }
 
+    Ok(())
+}
+
+fn store_and_print(mods: &Vec<ModInfoFull>, json: bool) -> Result<()> {
+    for item in mods.iter() {
+        if item.store().is_err() {
+            log::error!("storing mod failed...");
+        };
+        if json {
+            let pretty = serde_json::to_string_pretty(&item)?;
+            println!("{}", pretty);
+        } else {
+            println!("{}", item);
+        }
+    }
     Ok(())
 }

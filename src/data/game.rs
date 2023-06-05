@@ -151,6 +151,23 @@ impl GameMetadata {
             .collect()
     }
 
+    /// Get all mods for this game with an uploader string that matches the given filter pattern.
+    /// Case-insensitive, but otherwise a very naive match.
+    pub fn mods_author_match(&self, filter: &str) -> Vec<ModInfoFull> {
+        let prefix = format!("{}/", &self.domain_name);
+        let candidates = ModInfoFull::by_prefix(&prefix);
+        let patt = RegexBuilder::new(filter)
+            .case_insensitive(true)
+            .build()
+            .unwrap();
+        candidates
+            .into_iter()
+            .filter(|modinfo| {
+                patt.is_match(modinfo.uploaded_by()) || patt.is_match(modinfo.author())
+            })
+            .collect()
+    }
+
     /// Get all mods for this game with names or summaries that match the given filter pattern.
     /// Case-insensitive, but otherwise a very naive match.
     // Note repetition with previous function. Searching needs some abstractions.
@@ -169,7 +186,6 @@ impl GameMetadata {
                     || patt.is_match(modinfo.uploaded_by())
                     || patt.is_match(modinfo.author())
             })
-            .sorted_by(|left, right| UniCase::new(left.name()).cmp(&UniCase::new(right.name())))
             .collect()
     }
 

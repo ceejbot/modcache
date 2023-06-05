@@ -287,11 +287,13 @@ impl Display for ModInfoFull {
         };
         write!(
             f,
-            "{}\n{} {} {}\n{}\n",
+            "{}\n{} {} {} {} {}\n{}\n",
             self.compact_info(),
             "last update".dimmed(),
             dt.blue().bold(),
             self.version.red(),
+            "id".dimmed(),
+            self.mod_id(),
             &summary
         )
     }
