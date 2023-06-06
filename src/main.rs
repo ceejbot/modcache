@@ -356,7 +356,7 @@ fn main() -> Result<()> {
                     let pretty = serde_json::to_string_pretty(&modinfo)?;
                     println!("{}", pretty);
                 } else {
-                    println!("{}", modinfo.full_info());
+                    modinfo.print_full_info();
                 }
             }
         }

@@ -1,6 +1,8 @@
 // All structs and trait impls supporting the full mod info response from the Nexus.
 
 use std::fmt::Display;
+use std::io::Write;
+use std::process::{Command, Stdio};
 
 use chrono::{DateTime, Utc};
 use kv::{Codec, Json};
@@ -281,24 +283,48 @@ impl ModInfoFull {
         textwrap::fill(&self.summary_cleaned(), width)
     }
 
-    pub fn full_info(&self) -> String {
+    pub fn print_full_info(&self) {
         let dt = match self.updated_time.parse::<DateTime<Utc>>() {
             Ok(v) => v.format("%Y-%m-%d").to_string(),
             Err(_) => self.updated_time.clone(),
         };
-        let md = self.description_md();
 
-        format!(
-            "\n{}\n{} {} {} {} {}\n\n{}\n\n{}\n",
+        println!(
+            "\n{}\n{} {} {} {} {}\n\n{}\n\n",
             self.compact_info(),
             "last update".dimmed(),
             dt.blue().bold(),
             self.version.red(),
             "id".dimmed(),
             self.mod_id(),
-            &self.summary_wrapped(),
-            md
-        )
+            &self.summary_wrapped()
+        );
+
+        // The hacky completion of our markdown hack: shelling out to mdcat or glow
+        // to emit the description.
+        let md = self.description_md();
+        let subproc = Command::new("mdcat").arg("-").stdin(Stdio::piped()).spawn();
+        if let Ok(mut subproc) = subproc {
+            let substdin = subproc.stdin.as_mut().unwrap();
+            if substdin.write_all(md.as_bytes()).is_ok() {
+                let _result = substdin.flush();
+                let _output = subproc.wait_with_output();
+                return;
+            }
+        }
+
+        let subproc = Command::new("glow").arg("-").stdin(Stdio::piped()).spawn();
+        if let Ok(mut subproc) = subproc {
+            let substdin = subproc.stdin.as_mut().unwrap();
+            if substdin.write_all(md.as_bytes()).is_ok() {
+                let _result = substdin.flush();
+                let _output = subproc.wait_with_output();
+                return;
+            }
+        }
+
+        // Fall back to printing the markdown.
+        println!("{md}");
     }
 }
 

@@ -6,7 +6,7 @@ Another intended use case was for me to scan my list of tracked mods to see whic
 
 However, the tool is still useful as a *very* rapid local search of all the locally-cached data. Results are sortable; run `modcache search --help` for options.
 
-The output has clickable http links to the Nexus if your terminal supports it.
+The output has clickable http links to the Nexus if your terminal supports it. If you have `mdcat` or `glow` installed, the detailed info display for a single mod-- invoked as `modcache mod <id> [game]`-- will render the mod's description in your terminal.
 
 Install Rust for your platform with [rustup](https://rustup.rs). Copy `.env-example` into `.env` and add your api key, which you can find [on the Nexus settings page](https://www.nexusmods.com/users/myaccount?tab=api). Run `cargo run -- help` for usage. `cargo run -- <command> --help` shows detailed help for that command.
 
