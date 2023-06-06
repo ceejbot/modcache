@@ -13,8 +13,20 @@ use terminal_size::*;
 use crate::nexus::NexusClient;
 use crate::{Cacheable, CompoundKey, EndorsementStatus};
 
+// We do solemnly swear or affirm that these regexes are valid.
+// This is a terrifyingly stupid bbcode -> markdown converter.
+// Why is it stupid? A) regex and B) are you kidding.
 static SUMMARY_CLEANER: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"(\[[^\]]+\]|<br />|<br>)").unwrap());
+static URL_PATT: Lazy<Regex> = Lazy::new(|| Regex::new(r"\[url=([^\]]+)\](.+?)\[/url\]").unwrap());
+static IMG_PATT: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?i)\[img\](.+?)\[/img\]").unwrap());
+static WHITESPACE: Lazy<Regex> = Lazy::new(|| Regex::new(r"( {2,})").unwrap());
+static NEWLINES: Lazy<Regex> = Lazy::new(|| Regex::new(r"(\n{3,})").unwrap());
+static SIZE_PATT: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?i)\[SIZE(=\d+)?\]").unwrap());
+static LISTS: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?i)\[(/)?LIST\]").unwrap());
+static CENTERS: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?i)\[(/)?CENTER\]").unwrap());
+static BOLD: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?i)\[(/)?B\]").unwrap());
+static ITALIC: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?i)\[(/)?I\]").unwrap());
 
 #[derive(serde::Deserialize, Serialize, Debug, Clone)]
 pub struct ModAuthor {
@@ -161,6 +173,26 @@ impl ModInfoFull {
         &self.description
     }
 
+    pub fn description_md(&self) -> String {
+        // The world's stupidest bbcode to markdown converter.
+        let mut text = self
+            .description
+            .replace("\n<br />", "\n\n")
+            .replace("   ﻿", "")
+            .replace("[*]", "- ")
+            .replace("[/size]", "");
+        text = BOLD.replace_all(&text, "**").to_string();
+        text = ITALIC.replace_all(&text, "*").to_string();
+        text = SIZE_PATT.replace_all(&text, "").to_string();
+        text = URL_PATT.replace_all(&text, "[$2]($1)").to_string();
+        text = IMG_PATT.replace_all(&text, "![]($1)").to_string();
+        text = WHITESPACE.replace_all(&text, " ").to_string();
+        text = LISTS.replace_all(&text, "").to_string();
+        text = CENTERS.replace_all(&text, "\n").to_string();
+        text = NEWLINES.replace_all(&text, "\n\n").to_string();
+        text.replace("\n ", "\n")
+    }
+
     pub fn category_id(&self) -> u16 {
         self.category_id
     }
@@ -239,6 +271,35 @@ impl ModInfoFull {
             )
         }
     }
+
+    pub fn summary_wrapped(&self) -> String {
+        let width: usize = if let Some((Width(w), Height(_h))) = terminal_size() {
+            w as usize - 2
+        } else {
+            72
+        };
+        textwrap::fill(&self.summary_cleaned(), width)
+    }
+
+    pub fn full_info(&self) -> String {
+        let dt = match self.updated_time.parse::<DateTime<Utc>>() {
+            Ok(v) => v.format("%Y-%m-%d").to_string(),
+            Err(_) => self.updated_time.clone(),
+        };
+        let md = self.description_md();
+
+        format!(
+            "\n{}\n{} {} {} {} {}\n\n{}\n\n{}\n",
+            self.compact_info(),
+            "last update".dimmed(),
+            dt.blue().bold(),
+            self.version.red(),
+            "id".dimmed(),
+            self.mod_id(),
+            &self.summary_wrapped(),
+            md
+        )
+    }
 }
 
 impl Default for ModInfoFull {
@@ -275,12 +336,6 @@ impl Default for ModInfoFull {
 
 impl Display for ModInfoFull {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let width: usize = if let Some((Width(w), Height(_h))) = terminal_size() {
-            w as usize - 2
-        } else {
-            72
-        };
-        let summary = textwrap::fill(&self.summary_cleaned(), width);
         let dt = match self.updated_time.parse::<DateTime<Utc>>() {
             Ok(v) => v.format("%Y-%m-%d").to_string(),
             Err(_) => self.updated_time.clone(),
@@ -294,7 +349,7 @@ impl Display for ModInfoFull {
             self.version.red(),
             "id".dimmed(),
             self.mod_id(),
-            &summary
+            &self.summary_wrapped()
         )
     }
 }

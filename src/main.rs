@@ -76,7 +76,7 @@ enum Command {
         game: String,
     },
     /// Find mods that mention this string in their names or text summaries.
-    /// 
+    ///
     /// Pass --refresh to update cached data from the Nexus for each result.
     Search {
         /// Optional sort for the matches: name, author, date
@@ -89,7 +89,7 @@ enum Command {
         game: String,
     },
     /// Find mods with names matching the given string, for the named game.
-    /// 
+    ///
     /// Pass --refresh to update cached data from the Nexus for each result.
     ByName {
         /// Optional sort for the matches: name, author, date
@@ -323,7 +323,7 @@ fn main() -> Result<()> {
         Command::ByAuthor {
             ref author,
             ref game,
-            ref sort,  
+            ref sort,
         } => {
             search::by_author(&flags, game, author, sort, &mut nexus)?;
         }
@@ -356,7 +356,7 @@ fn main() -> Result<()> {
                     let pretty = serde_json::to_string_pretty(&modinfo)?;
                     println!("{}", pretty);
                 } else {
-                    println!("{}", modinfo);
+                    println!("{}", modinfo.full_info());
                 }
             }
         }
@@ -478,7 +478,7 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn store_and_print(mods: &Vec<ModInfoFull>, json: bool) -> Result<()> {
+fn store_and_print(mods: &[ModInfoFull], json: bool) -> Result<()> {
     for item in mods.iter() {
         if item.store().is_err() {
             log::error!("storing mod failed...");
