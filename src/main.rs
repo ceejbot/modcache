@@ -22,6 +22,7 @@ pub mod data;
 pub mod formatting;
 pub mod nexus;
 
+use commands::mods::{show_single_mod, show_game_mods};
 use commands::*;
 use data::*;
 use unicase::UniCase;
@@ -338,7 +339,7 @@ fn main() -> Result<()> {
             handle_game(&flags, game, &mut nexus)?;
         }
         Command::Mods { ref game } => {
-            handle_mods(&flags, game, &mut nexus)?;
+            show_game_mods(&flags, game, &mut nexus)?;
         }
         Command::Hidden { ref game } => {
             cleanup::hidden(&flags, game, &mut nexus)?;
@@ -349,46 +350,40 @@ fn main() -> Result<()> {
         Command::Wastebinned { ref game } => {
             cleanup::wastebinned(&flags, game, &mut nexus)?;
         }
-        Command::Mod { game, mod_id } => {
-            let key = CompoundKey::new(game, mod_id);
-            if let Some(modinfo) = ModInfoFull::get(&key, flags.refresh, &mut nexus) {
-                if flags.json {
-                    let pretty = serde_json::to_string_pretty(&modinfo)?;
-                    println!("{}", pretty);
-                } else {
-                    modinfo.print_full_info();
-                }
-            }
+        Command::Mod { ref game, mod_id } => {
+            show_single_mod(&flags, game, mod_id, &mut nexus)?;
         }
-        Command::Track { game, mod_id } => match nexus.track(&game, mod_id) {
-            Ok(message) => {
-                let pretty = serde_json::to_string_pretty(&message)?;
-                println!("{}", pretty);
-            }
-            Err(_) => {
-                println!("Whoops. Run with -v to get more info.");
-            }
-        },
-        Command::Untrack { game, ids } => {
-            for mod_id in ids.iter() {
-                match nexus.untrack(&game, *mod_id) {
-                    Ok(message) => {
-                        if flags.json {
-                            let pretty = serde_json::to_string_pretty(&message)?;
-                            println!("{}", pretty);
-                        } else {
-                            println!("{}", message.message);
-                        }
-                    }
-                    Err(e) => {
-                        println!("Error untracking {}:\n{:?}", mod_id, e);
-                    }
-                }
-            }
+        Command::Endorsements { ref game } => {
+            handle_endorsements(&flags, game, &mut nexus)?;
+        }
+        Command::Endorse { ref game, ref ids } => {
+            mod_actions::endorse(&flags, game, ids, &mut nexus)?;
+        }
+        Command::Abstain { ref game, mod_id } => {
+            mod_actions::abstain(&flags, game, mod_id, &mut nexus)?;
+        }
+        Command::Track { ref game, mod_id } => {
+            mod_actions::track(&flags, game, mod_id, &mut nexus)?;
+        }
+        Command::Untrack { ref game, ref ids } => {
+            mod_actions::untrack(&flags, game, ids, &mut nexus)?;
         }
         Command::UntrackRemoved { ref game } => {
             cleanup::untrack_removed(&flags, game, &mut nexus)?;
         }
+        Command::Trending { game } => {
+            let res = nexus.trending(&game)?;
+            store_and_print(&res.mods, flags.json)?;
+        }
+        Command::Latest { game } => {
+            let res = nexus.latest_added(&game)?;
+            store_and_print(&res.mods, flags.json)?;
+        }
+        Command::Updated { game } => {
+            let res = nexus.latest_updated(&game)?;
+            store_and_print(&res.mods, flags.json)?;
+        }
+        // TODO: move these into the browser ui once it exists.
         Command::Changelogs { game, mod_id } => {
             let key = CompoundKey::new(game.clone(), mod_id);
             let maybe = Changelogs::get(&key, flags.refresh, &mut nexus);
@@ -425,53 +420,6 @@ fn main() -> Result<()> {
             } else {
                 println!("Nothing found.");
             }
-        }
-        Command::Endorsements { ref game } => {
-            handle_endorsements(&flags, game, &mut nexus)?;
-        }
-        Command::Endorse { game, ids } => {
-            for mod_id in ids.iter() {
-                match nexus.abstain(&game, *mod_id) {
-                    Ok(response) => {
-                        if flags.json {
-                            let pretty = serde_json::to_string_pretty(&response)?;
-                            println!("{}", pretty);
-                        } else {
-                            println!(
-                                "Endorsement status for mod {} is now {}",
-                                mod_id, response.status
-                            );
-                        }
-                    }
-                    Err(e) => {
-                        println!("Error endorsing {}:\n{:?}", mod_id, e);
-                    }
-                }
-            }
-        }
-        Command::Abstain { game, mod_id } => {
-            let response = nexus.abstain(&game, mod_id)?;
-            if flags.json {
-                let pretty = serde_json::to_string_pretty(&response)?;
-                println!("{}", pretty);
-            } else {
-                println!(
-                    "Endorsement status for mod {} is now {}",
-                    mod_id, response.status
-                );
-            }
-        }
-        Command::Trending { game } => {
-            let res = nexus.trending(&game)?;
-            store_and_print(&res.mods, flags.json)?;
-        }
-        Command::Latest { game } => {
-            let res = nexus.latest_added(&game)?;
-            store_and_print(&res.mods, flags.json)?;
-        }
-        Command::Updated { game } => {
-            let res = nexus.latest_updated(&game)?;
-            store_and_print(&res.mods, flags.json)?;
         }
     }
 
