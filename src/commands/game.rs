@@ -23,8 +23,9 @@ pub fn handle(flags: &Flags, game: &String, nexus: &mut NexusClient) -> anyhow::
             if let Some(tracked) = tracked {
                 let filtered = tracked.by_game(game);
                 println!(
-                    "You are tracking {} for this game.",
-                    pluralize_mod(filtered.len())
+                    "You are tracking {} for {}.",
+                    pluralize_mod(filtered.len()),
+                    game.yellow()
                 );
             }
         }

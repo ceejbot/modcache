@@ -14,19 +14,19 @@ all: build skyrim
 	cp target/release/modcache ~/bin
 
 # refresh tracked mods
-update:
+tracked:
     ./bin/modcache --refresh tracked
 
 # populate the cache with missing items
-@skyrim: update
-	bin/modcache populate
+skyrim:
+	./bin/modcache update skyrimspecialedition
 
-_bin:
-	@mkdir -p bin
+@_bin:
+	mkdir -p bin
 
 # clean up the bindir
-clean:
-	@rm -f bin/modcache
+@clean:
+	rm -f bin/modcache
 
 spotless:
 	cargo clean

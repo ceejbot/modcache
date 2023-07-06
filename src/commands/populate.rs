@@ -26,9 +26,10 @@ pub fn handle(
     let tracked = tracked.unwrap();
     let filtered = tracked.by_game(game);
     println!(
-        "You are tracking {} total and {} for this game.",
+        "You are tracking {} total and {} for {}.",
         pluralize_mod(tracked.mods.len()),
-        filtered.len().blue()
+        filtered.len().blue(),
+        game.yellow()
     );
 
     println!(

@@ -22,13 +22,15 @@ pub mod data;
 pub mod formatting;
 pub mod nexus;
 
-use commands::mods::{show_single_mod, show_game_mods};
+use commands::mods::{show_game_mods, show_single_mod};
 use commands::*;
 use data::*;
 use unicase::UniCase;
 
+static REQ_LIMIT: u16 = 50;
+
 // Set up the cli and commands
-#[derive(Debug, Parser)]
+#[derive(Debug, Parser, Clone)]
 #[clap(author, version, about, long_about = None)]
 pub struct Flags {
     #[clap(subcommand)]
@@ -70,9 +72,17 @@ enum Command {
     /// Populate the local cache with mods tracked for a specific game.
     Populate {
         /// The number of API calls allowed before stopping.
-        #[clap(short, long, default_value = "50")]
+        #[clap(short, long, default_value_t = REQ_LIMIT)]
         limit: u16,
         /// The game to populate.
+        #[clap(default_value = "skyrimspecialedition")]
+        game: String,
+    },
+    /// Refresh your tracked mods and pull new ones to cache.
+    ///
+    /// Executes `tracked` then `populate` for the given game.
+    Update {
+        /// The game to update.
         #[clap(default_value = "skyrimspecialedition")]
         game: String,
     },
@@ -313,6 +323,12 @@ fn main() -> Result<()> {
         }
         Command::Populate { ref game, limit } => {
             handle_populate(&flags, game, limit, &mut nexus)?;
+        }
+        Command::Update { ref game } => {
+            let mut force_refresh = flags.clone();
+            force_refresh.refresh = true;
+            handle_tracked(&force_refresh, &None, &mut nexus)?;
+            handle_populate(&force_refresh, game, REQ_LIMIT, &mut nexus)?;
         }
         Command::Search {
             ref text,
