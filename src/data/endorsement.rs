@@ -17,11 +17,11 @@ pub enum EndorsementStatus {
 }
 
 impl EndorsementStatus {
-    pub fn display_for_tracked(&self) -> String {
+    pub fn quieter_display(&self) -> String {
         match self {
             EndorsementStatus::Endorsed => "👍🏻".to_string(),
-            EndorsementStatus::Undecided => "".to_string(),
-            _ => "🚫".to_string(),
+            EndorsementStatus::Abstained => "🚫".to_string(),
+            _ => "".to_string(),
         }
     }
 }
@@ -29,9 +29,9 @@ impl EndorsementStatus {
 impl Display for EndorsementStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            EndorsementStatus::Endorsed => write!(f, " "),
-            EndorsementStatus::Undecided => write!(f, "🤔"),
-            _ => write!(f, "🚫"),
+            EndorsementStatus::Endorsed => write!(f, "👍🏻"),
+            EndorsementStatus::Abstained => write!(f, "🚫"),
+            _ => write!(f, "🤔"),
         }
     }
 }

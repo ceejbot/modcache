@@ -167,19 +167,17 @@ enum Command {
     },
     /// Endorse a mod or list of mods
     Endorse {
+        /// Which game the mods belong to; Nexus short name
+        game: String,
         /// The ids of the mods to endorse
         ids: Vec<u32>,
-        /// Which game the mods belong to; Nexus short name
-        #[clap(default_value = "skyrimspecialedition")]
-        game: String,
     },
     /// Abstain from endorsing a mod.
     Abstain {
+        /// Which game the mods belong to; Nexus short name
+        game: String,
         /// The id of the mod to refuse to endorse
         mod_id: u32,
-        /// Which game the mods belong to; Nexus short name
-        #[clap(default_value = "skyrimspecialedition")]
-        game: String,
     },
     /// Get Nexus metadata about a game by slug
     Game {

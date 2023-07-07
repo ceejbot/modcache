@@ -163,7 +163,7 @@ pub struct ModInfoList {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct EndorseResponse {
-    message: String,
+    pub message: String,
     pub status: EndorsementStatus,
 }
 

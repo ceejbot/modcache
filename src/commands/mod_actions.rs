@@ -1,3 +1,5 @@
+use owo_colors::OwoColorize;
+
 use crate::nexus::NexusClient;
 use crate::Flags;
 
@@ -44,15 +46,17 @@ pub fn endorse(
     nexus: &mut NexusClient,
 ) -> anyhow::Result<()> {
     for mod_id in ids.iter() {
-        match nexus.abstain(game, *mod_id) {
+        match nexus.endorse(game, *mod_id) {
             Ok(response) => {
                 if flags.json {
                     let pretty = serde_json::to_string_pretty(&response)?;
                     println!("{}", pretty);
                 } else {
+                    println!("Nexus response: {}", response.message.blue());
                     println!(
                         "Endorsement status for mod {} is now {}",
-                        mod_id, response.status
+                        mod_id.yellow(),
+                        response.status.blue()
                     );
                 }
             }

@@ -262,7 +262,7 @@ impl ModInfoFull {
                 self.url(),
                 self.display_name(),
                 self.uploaded_by.cyan(),
-                endorse.endorse_status.display_for_tracked()
+                endorse.endorse_status.quieter_display()
             )
         } else {
             format!(
