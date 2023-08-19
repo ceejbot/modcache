@@ -12,6 +12,7 @@ use std::sync::Mutex;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use clap_complete::{generate, Shell};
 use dotenvy::dotenv;
 use once_cell::sync::OnceCell;
 use owo_colors::OwoColorize;
@@ -59,7 +60,7 @@ pub struct Flags {
     refresh: bool,
 }
 
-#[derive(Clone, Debug, Serialize, Subcommand)]
+#[derive(Clone, Debug, Subcommand)]
 enum Command {
     /// Test your Nexus API key; whoami
     #[clap(alias = "whoami")]
@@ -229,6 +230,10 @@ enum Command {
         /// Which game the mods belong to; Nexus short name
         #[clap(default_value = "skyrimspecialedition")]
         game: String,
+    },
+    Completions {
+        #[clap(value_enum)]
+        shell: Shell,
     },
 }
 
@@ -434,6 +439,11 @@ fn main() -> Result<()> {
             } else {
                 println!("Nothing found.");
             }
+        }
+        Command::Completions { shell } => {
+            use clap::CommandFactory;
+            let mut app = Flags::command();
+            generate(shell, &mut app, "modcache", &mut std::io::stdout())
         }
     }
 
