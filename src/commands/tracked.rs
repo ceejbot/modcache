@@ -13,7 +13,9 @@ use crate::{Flags, GameMetadata};
 pub fn handle(flags: &Flags, game: &Option<String>, nexus: &mut NexusClient) -> anyhow::Result<()> {
     let maybe = Tracked::get(&Tracked::listkey(), flags.refresh, nexus);
     let Some(tracked) = maybe else {
-        log::error!("Something went wrong fetching tracked mods. Rerun with -v to get more details.");
+        log::error!(
+            "Something went wrong fetching tracked mods. Rerun with -v to get more details."
+        );
         return Ok(());
     };
 
@@ -45,9 +47,7 @@ pub fn handle(flags: &Flags, game: &Option<String>, nexus: &mut NexusClient) -> 
     filtered.iter().for_each(|m| {
         let key = CompoundKey::new(game.clone(), m.mod_id);
         if let Some(mod_info) = local::<ModInfoFull>(&key) {
-            let bucket = cat_map
-                .entry(mod_info.category_id())
-                .or_insert_with(Vec::new);
+            let bucket = cat_map.entry(mod_info.category_id()).or_default();
             match mod_info.status() {
                 ModStatus::Wastebinned => {
                     wasted.push(*mod_info);

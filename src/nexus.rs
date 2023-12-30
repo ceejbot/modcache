@@ -344,6 +344,20 @@ impl NexusClient {
         None
     }
 
+    /// Get detailed info about a file.
+    pub fn mod_file_info(
+        &mut self,
+        game: &str,
+        mod_id: u32,
+        file: &str,
+    ) -> anyhow::Result<FileInfo> {
+        let uri = format!(
+            "{}/v1/games/{}/{}/files/{}.json",
+            NEXUS_BASE, game, mod_id, file
+        );
+        self.get::<FileInfo>(&uri)
+    }
+
     /// Fetch the list of mods tracked for all games.
     pub fn tracked(&mut self, etag: Option<String>) -> Option<Tracked> {
         let uri = format!("{}/v1/user/tracked_mods.json", NEXUS_BASE);
@@ -416,8 +430,4 @@ impl NexusClient {
         let uri = format!("{}/v1/games/{}/mods/latest_updated.json", NEXUS_BASE, game);
         self.get::<ModInfoList>(&uri)
     }
-
-    // TODO
-    // /v1/games/:game/mods/:mod/files.json
-    // /v1/games/:game/mods/:mod/files/:file.json
 }

@@ -1,5 +1,6 @@
 pub mod cleanup;
 pub mod endorsements;
+pub mod files;
 pub mod game;
 pub mod mod_actions;
 pub mod mods; // unfortunate, but this is the best name IMO

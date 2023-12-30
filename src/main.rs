@@ -153,13 +153,31 @@ enum Command {
         #[clap(default_value = "skyrimspecialedition")]
         game: String,
     },
-    /// Get the list of files for a specific mod. Not very useful yet.
+    /// Get the list of files for a specific mod.
     Files {
         /// The id of the mod to fetch files for
         mod_id: u32,
         /// Which game the mods belong to; Nexus short name
         #[clap(default_value = "skyrimspecialedition")]
         game: String,
+    },
+    /// Get information about the mod's primary file, usefully formatted.
+    PrimaryFile {
+        /// The id of the mod to fetch files for
+        mod_id: u32,
+        /// Which game the mods belong to; Nexus short name
+        #[clap(default_value = "skyrimspecialedition")]
+        game: String,
+    },
+    /// Get information about a specific mod file.
+    FileInfo {
+        /// The id of the mod to fetch files for
+        mod_id: u32,
+        /// Which game the mods belong to; Nexus short name
+        #[clap(default_value = "skyrimspecialedition")]
+        game: String,
+        /// the id of the file to get detailed info on
+        file_id: usize,
     },
     /// Fetch the list of mods you have endorsed
     Endorsements {
@@ -429,16 +447,18 @@ fn main() -> Result<()> {
                 }
             }
         }
-        Command::Files { game, mod_id } => {
-            let key = CompoundKey::new(game, mod_id);
-            let maybe = Files::get(&key, flags.refresh, &mut nexus);
-            if let Some(files) = maybe {
-                let pretty = serde_json::to_string_pretty(&files)?;
-                println!("{}", pretty);
-                return Ok(());
-            } else {
-                println!("Nothing found.");
-            }
+        Command::Files { ref game, mod_id } => {
+            return commands::files::mod_files(game.as_str(), mod_id, &flags, &mut nexus)
+        }
+        Command::PrimaryFile { ref game, mod_id } => {
+            return commands::files::primary_file(game.as_str(), mod_id, &flags, &mut nexus);
+        }
+        Command::FileInfo {
+            ref game,
+            mod_id,
+            file_id,
+        } => {
+            return commands::files::file_by_id(game.as_str(), mod_id, file_id, &flags, &mut nexus);
         }
         Command::Completions { shell } => {
             use clap::CommandFactory;

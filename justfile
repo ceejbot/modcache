@@ -15,18 +15,18 @@ all: build skyrim
 
 # refresh tracked mods
 tracked:
-    ./bin/modcache --refresh tracked
+    modcache --refresh tracked
 
 # populate the cache with missing items
 skyrim:
-	./bin/modcache update skyrimspecialedition
+	modcache update skyrimspecialedition
 
 @_bin:
 	mkdir -p bin
 
 # clean up the bindir
 @clean:
-	rm -f bin/modcache
+	rm -f ./bin/modcache
 
 spotless:
 	cargo clean
